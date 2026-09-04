@@ -35,17 +35,22 @@ body {
 }
 
 .topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-  padding: 1.1rem 2rem;
   background: var(--bg);
   box-shadow: 0 1px 0 var(--border), 0 8px 24px -16px rgba(0, 0, 0, 0.6);
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.topbar-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 1.1rem clamp(1.5rem, 3vw, 3rem);
 }
 
 .brand {
@@ -183,9 +188,10 @@ body {
 }
 
 .content {
-  max-width: 1200px;
+  max-width: 1800px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem clamp(1.5rem, 3vw, 3rem);
+  box-sizing: border-box;
 }
 
 .panel {
@@ -680,15 +686,14 @@ body {
 
 .donut-wrap {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 2rem;
-  flex-wrap: wrap;
+  gap: 1.5rem;
 }
 
 .donut-svg {
-  flex: 1 1 200px;
   width: 100%;
-  max-width: 300px;
+  max-width: 320px;
   height: auto;
 }
 
@@ -707,17 +712,17 @@ body {
 
 .donut-legend {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  flex: 1;
-  min-width: 160px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem 1.5rem;
+  width: 100%;
 }
 
 .donut-legend-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 0.88rem;
+  gap: 0.55rem;
+  font-size: 0.9rem;
 }
 
 .donut-swatch {
@@ -732,7 +737,6 @@ body {
 }
 
 .donut-legend-name {
-  flex: 1;
   color: var(--ink-soft);
 }
 

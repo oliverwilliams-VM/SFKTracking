@@ -401,6 +401,7 @@ export default function Home() {
 
       <div className="page">
         <header className="topbar">
+          <div className="topbar-inner">
           <div className="brand">
             <Logo
               candidates={["/Vita Mojo_Primary_Dark.png", "/vita-mojo-logo.svg", "/vita-mojo-logo.png"]}
@@ -448,6 +449,7 @@ export default function Home() {
             <button className="refresh" onClick={load} disabled={loading}>
               {loading ? <BouncingDots /> : "Refresh"}
             </button>
+          </div>
           </div>
         </header>
 
