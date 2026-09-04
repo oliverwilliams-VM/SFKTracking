@@ -8,6 +8,15 @@ const BOARD_ID = process.env.MONDAY_BOARD_ID || "5678025992"; // Sign Up -> Read
 const SFK_COLUMN_TITLE = "SFK Format";
 const SFK_TARGET_VALUE = "Part Subway Funded";
 const MONDAY_API_URL = "https://api.monday.com/v2";
+const PAGE_SIZE = 500; // Monday's max items_page limit - fewer round trips for a big board
+
+// Give this function room to page through a large board (this is the Hobby
+// plan's max without Fluid Compute; if the board is big enough to still time
+// out, the fix is server-side filtering via query_params, not a bigger number
+// here).
+export const config = {
+  maxDuration: 60,
+};
 
 async function mondayQuery(query, variables) {
   const res = await fetch(MONDAY_API_URL, {
@@ -35,7 +44,7 @@ const BOARD_QUERY = `
         id
         title
       }
-      items_page(limit: 100, cursor: $cursor) {
+      items_page(limit: ${PAGE_SIZE}, cursor: $cursor) {
         cursor
         items {
           id
@@ -55,7 +64,7 @@ const BOARD_QUERY = `
 
 const NEXT_PAGE_QUERY = `
   query ($cursor: String!) {
-    next_items_page(limit: 100, cursor: $cursor) {
+    next_items_page(limit: ${PAGE_SIZE}, cursor: $cursor) {
       cursor
       items {
         id
