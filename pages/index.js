@@ -64,43 +64,92 @@ function PipelineChart({ entries }) {
     <div className="chart pipeline-chart">
       {entries.map(([phase, count]) => (
         <div className="pipeline-chart-row" key={phase}>
-          <span className="pipeline-chart-label">{splitPhaseLabel(phase).label}</span>
+          <div className="pipeline-chart-top">
+            <span className="pipeline-chart-label">{splitPhaseLabel(phase).label}</span>
+            <span className="pipeline-chart-count">{count}</span>
+          </div>
           <div className="pipeline-chart-track">
             <div
               className={`pipeline-chart-fill fill-${phaseTone(phase)}`}
               style={{ width: `${Math.max(3, (count / max) * 100)}%` }}
             />
           </div>
-          <span className="pipeline-chart-count">{count}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function CountryChart({ rows }) {
-  const max = Math.max(1, ...rows.map((r) => r.total));
+const DONUT_COLORS = ["#8b5cf6", "#2dd4bf", "#fbbf24", "#f87171", "#60a5fa", "#f472b6", "#34d399", "#c084fc"];
+
+function DonutChart({ rows }) {
+  const total = rows.reduce((sum, r) => sum + r.total, 0) || 1;
+  const size = 180;
+  const strokeWidth = 30;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  let offsetSoFar = 0;
+  const segments = rows.map((row, i) => {
+    const fraction = row.total / total;
+    const length = fraction * circumference;
+    const segment = {
+      ...row,
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      length,
+      offset: offsetSoFar,
+      pct: Math.round(fraction * 100),
+    };
+    offsetSoFar += length;
+    return segment;
+  });
+
   return (
-    <div className="chart country-chart">
-      {rows.map((row) => (
-        <div className="country-chart-col" key={row.country}>
-          <div className="country-chart-bar-wrap">
-            <div
-              className="country-chart-bar"
-              style={{ height: `${Math.max(4, (row.total / max) * 100)}%` }}
-            >
-              {row.live > 0 && (
-                <div
-                  className="country-chart-bar-live"
-                  style={{ height: `${(row.live / row.total) * 100}%` }}
-                />
-              )}
-            </div>
+    <div className="donut-wrap">
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="donut-svg">
+        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="var(--panel-alt)"
+            strokeWidth={strokeWidth}
+          />
+          {segments.map((seg) => (
+            <circle
+              key={seg.country}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${seg.length} ${circumference - seg.length}`}
+              strokeDashoffset={-seg.offset}
+            />
+          ))}
+        </g>
+        <text x="50%" y="47%" textAnchor="middle" className="donut-center-value">
+          {total}
+        </text>
+        <text x="50%" y="60%" textAnchor="middle" className="donut-center-label">
+          sites
+        </text>
+      </svg>
+
+      <div className="donut-legend">
+        {segments.map((seg) => (
+          <div className="donut-legend-row" key={seg.country}>
+            <span className="donut-swatch" style={{ background: seg.color }} />
+            <span className="donut-legend-flag">{flagFor(seg.country)}</span>
+            <span className="donut-legend-name">{seg.country}</span>
+            <span className="donut-legend-count">
+              {seg.total} <span className="donut-legend-pct">({seg.pct}%)</span>
+            </span>
           </div>
-          <span className="country-chart-total">{row.total}</span>
-          <span className="country-chart-flag">{flagFor(row.country)}</span>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -561,7 +610,7 @@ export default function Home() {
                 </div>
                 <div className="panel chart-panel">
                   <h2>Sites by country</h2>
-                  <CountryChart rows={byCountry} />
+                  <DonutChart rows={byCountry} />
                 </div>
               </section>
 
