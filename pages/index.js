@@ -66,14 +66,13 @@ function BouncingDots() {
   );
 }
 
-function Logo({ base, alt }) {
-  const candidates = [`${base}.svg`, `${base}.png`, `${base}.jpg`];
+function Logo({ candidates, alt }) {
   const [index, setIndex] = useState(0);
   if (index >= candidates.length) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={candidates[index]}
+      src={encodeURI(candidates[index])}
       alt={alt}
       className="logo"
       onError={() => setIndex((i) => i + 1)}
@@ -197,8 +196,14 @@ export default function Home() {
       <div className="page">
         <header className="topbar">
           <div className="brand">
-            <Logo base="/vita-mojo-logo" alt="Vita Mojo" />
-            <Logo base="/subway-logo" alt="Subway" />
+            <Logo
+              candidates={["/Vita Mojo_Primary_Dark.png", "/vita-mojo-logo.svg", "/vita-mojo-logo.png"]}
+              alt="Vita Mojo"
+            />
+            <Logo
+              candidates={["/Subway.png", "/subway-logo.svg", "/subway-logo.png"]}
+              alt="Subway"
+            />
             <span className="brand-name">SFK — Part Subway Funded</span>
           </div>
 

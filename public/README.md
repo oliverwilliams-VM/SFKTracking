@@ -1,13 +1,12 @@
-Drop your logo files here with these exact base names — .svg, .png, or .jpg
-all work, the dashboard tries each extension automatically:
+Logo files used by the header (already in this folder, matching the naming
+from your other dashboards):
 
-- vita-mojo-logo.svg  (or .png / .jpg)
-- subway-logo.svg     (or .png / .jpg)
+- Vita Mojo_Primary_Dark.png
+- Subway.png
 
-If a file is missing, the header just falls back to no logo instead of
-breaking. If logos still don't show after adding them, double check:
-1. The files actually landed in `public/` (not a subfolder)
-2. The filename matches exactly (case-sensitive) - "Subway-Logo.png" won't
-   match "subway-logo"
-3. You redeployed after pushing - Vercel needs a fresh deployment to pick up
-   new files in public/
+The code tries these exact names first, then falls back to
+vita-mojo-logo.(svg|png) / subway-logo.(svg|png) if you ever swap them out.
+If a file is missing it just quietly shows no logo instead of breaking.
+
+Note: filenames are case-sensitive on Vercel (Linux) even though they're not
+on a Mac - if you rename these, match the case exactly.
