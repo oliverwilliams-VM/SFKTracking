@@ -154,6 +154,20 @@ function DonutChart({ rows }) {
   );
 }
 
+function downloadCsv(filename, rows) {
+  const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = rows.map((row) => row.map(escape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function BouncingDots() {
   return (
     <span className="dots" aria-label="Loading">
@@ -649,12 +663,34 @@ export default function Home() {
 
               {staleItems.length > 0 && (
                 <section className="panel stale-panel">
-                  <h2>
-                    Needs attention{" "}
-                    <span className="stale-count">
-                      {staleItems.length} site{staleItems.length === 1 ? "" : "s"} untouched {STALE_DAYS}+ days
-                    </span>
-                  </h2>
+                  <div className="stale-header">
+                    <h2>
+                      Needs attention{" "}
+                      <span className="stale-count">
+                        {staleItems.length} site{staleItems.length === 1 ? "" : "s"} untouched {STALE_DAYS}+ days
+                      </span>
+                    </h2>
+                    <button
+                      type="button"
+                      className="stale-download"
+                      onClick={() =>
+                        downloadCsv(
+                          `sfk-needs-attention-${new Date().toISOString().slice(0, 10)}.csv`,
+                          [
+                            ["Site", "Country", "Install phase", "Days untouched"],
+                            ...staleItems.map((item) => [
+                              item.name,
+                              item.country || "Not set",
+                              splitPhaseLabel(item.installPhase).label || "Not set",
+                              item.daysSince,
+                            ]),
+                          ]
+                        )
+                      }
+                    >
+                      Download CSV
+                    </button>
+                  </div>
                   <div className="stale-list">
                     {staleItems.slice(0, 12).map((item) => (
                       <div className="stale-row" key={item.id}>
@@ -668,7 +704,9 @@ export default function Home() {
                     ))}
                   </div>
                   {staleItems.length > 12 && (
-                    <p className="stale-more">+ {staleItems.length - 12} more</p>
+                    <p className="stale-more">
+                      + {staleItems.length - 12} more — download the CSV for the full list
+                    </p>
                   )}
                 </section>
               )}
