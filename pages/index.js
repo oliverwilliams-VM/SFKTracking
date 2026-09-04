@@ -58,12 +58,17 @@ function splitPhaseLabel(phase) {
 
 // Simple CSS-bar charts - no charting library needed for two shapes this
 // straightforward, and it keeps styling consistent with the rest of the app.
-function PipelineChart({ entries }) {
+function PipelineChart({ entries, selected, onSelect }) {
   const max = Math.max(1, ...entries.map(([, count]) => count));
   return (
     <div className="chart pipeline-chart">
       {entries.map(([phase, count]) => (
-        <div className="pipeline-chart-row" key={phase}>
+        <button
+          type="button"
+          className={`pipeline-chart-row ${selected === phase ? "pipeline-chart-row-active" : ""}`}
+          key={phase}
+          onClick={() => onSelect(selected === phase ? null : phase)}
+        >
           <div className="pipeline-chart-top">
             <span className="pipeline-chart-label">{splitPhaseLabel(phase).label}</span>
             <span className="pipeline-chart-count">{count}</span>
@@ -74,7 +79,7 @@ function PipelineChart({ entries }) {
               style={{ width: `${Math.max(3, (count / max) * 100)}%` }}
             />
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -312,10 +317,6 @@ export default function Home() {
     () => phaseOverview.find(([phase]) => splitPhaseLabel(phase).label.toLowerCase() === "installing"),
     [phaseOverview]
   );
-  const remainingPhases = useMemo(
-    () => phaseOverview.filter(([phase]) => phase !== liveEntry?.[0] && phase !== installingEntry?.[0]),
-    [phaseOverview, liveEntry, installingEntry]
-  );
 
   const totals = useMemo(() => {
     if (!data) return { total: 0, live: 0 };
@@ -535,25 +536,6 @@ export default function Home() {
                 )}
               </section>
 
-              <section className="phase-overview-row">
-                {remainingPhases.map(([phase, count]) => {
-                  const { label } = splitPhaseLabel(phase);
-                  return (
-                    <button
-                      type="button"
-                      className={`phase-card phase-${phaseTone(phase)} ${selectedKpi === phase ? "phase-card-active" : ""}`}
-                      key={phase}
-                      onClick={() => setSelectedKpi(selectedKpi === phase ? null : phase)}
-                    >
-                      <div className="phase-card-top">
-                        <p className="phase-count">{count}</p>
-                      </div>
-                      <p className="phase-name">{label}</p>
-                    </button>
-                  );
-                })}
-              </section>
-
               {selectedBreakdown && (
                 <section className="panel breakdown-panel">
                   <div className="breakdown-header">
@@ -622,7 +604,7 @@ export default function Home() {
               <section className="charts-row">
                 <div className="panel chart-panel">
                   <h2>Pipeline overview</h2>
-                  <PipelineChart entries={phaseOverview} />
+                  <PipelineChart entries={phaseOverview} selected={selectedKpi} onSelect={setSelectedKpi} />
                 </div>
                 <div className="panel chart-panel">
                   <h2>Sites by country</h2>
@@ -638,7 +620,11 @@ export default function Home() {
                       <div>
                         <p className="country-name">{row.country}</p>
                         <p className="country-total">
-                          {row.total} <span className="country-live">· {row.live} live</span>
+                          {row.total}{" "}
+                          <span className="country-live">
+                            · {row.live} live
+                            {row.total > 0 && ` (${Math.round((row.live / row.total) * 100)}%)`}
+                          </span>
                         </p>
                       </div>
                     </div>
