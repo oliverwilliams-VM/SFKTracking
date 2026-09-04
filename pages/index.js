@@ -32,6 +32,23 @@ function phaseTone(phase) {
   return "neutral";
 }
 
+function BouncingDots() {
+  return (
+    <span className="dots" aria-label="Loading">
+      <span></span>
+      <span></span>
+      <span></span>
+    </span>
+  );
+}
+
+function Logo({ src, alt }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt} className="logo" onError={() => setFailed(true)} />;
+}
+
 export default function Home() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -99,6 +116,17 @@ export default function Home() {
       .sort((a, b) => b.total - a.total);
   }, [data]);
 
+  // Overall counts per phase, across every country - the top KPI row.
+  const phaseOverview = useMemo(() => {
+    if (!data) return [];
+    const counts = {};
+    data.items.forEach((item) => {
+      const v = item.installPhase || "Not set";
+      counts[v] = (counts[v] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [data]);
+
   const totals = useMemo(() => {
     if (!data) return { total: 0, live: 0 };
     const live = data.items.filter((item) =>
@@ -121,8 +149,9 @@ export default function Home() {
       <div className="page">
         <header className="topbar">
           <div className="brand">
-            <span className="brand-mark">SFK</span>
-            <span className="brand-name">Part Subway Funded Dashboard</span>
+            <Logo src="/vita-mojo-logo.svg" alt="Vita Mojo" />
+            <Logo src="/subway-logo.svg" alt="Subway" />
+            <span className="brand-name">SFK — Part Subway Funded</span>
           </div>
 
           <div className="topbar-right">
@@ -135,7 +164,7 @@ export default function Home() {
               <p className="stat-value">{data ? totals.live : "—"}</p>
             </div>
             <button className="refresh" onClick={load} disabled={loading}>
-              {loading ? "Refreshing…" : "Refresh"}
+              {loading ? <BouncingDots /> : "Refresh"}
             </button>
           </div>
         </header>
@@ -148,7 +177,12 @@ export default function Home() {
             </div>
           )}
 
-          {loading && !data && <div className="panel">Loading sites…</div>}
+          {loading && !data && (
+            <div className="panel loading-panel">
+              <BouncingDots />
+              <p>Loading sites…</p>
+            </div>
+          )}
 
           {data && (
             <>
@@ -162,77 +196,50 @@ export default function Home() {
                 </div>
               )}
 
-              <section className="country-row">
-                {byCountry.map((row) => (
-                  <div className="country-card" key={row.country}>
-                    <p className="country-flag">{flagFor(row.country)}</p>
-                    <p className="country-name">{row.country}</p>
-                    <p className="country-total">{row.total}</p>
-                    <p className="country-live">{row.live} live</p>
+              <section className="phase-overview-row">
+                {phaseOverview.map(([phase, count]) => (
+                  <div className={`phase-card phase-${phaseTone(phase)}`} key={phase}>
+                    <p className="phase-count">{count}</p>
+                    <p className="phase-name">{phase}</p>
                   </div>
                 ))}
               </section>
 
-              <section className="panel pivot-panel">
-                <h2>Install phase by country</h2>
-                <div className="table-scroll">
-                  <table className="pivot-table">
-                    <thead>
-                      <tr>
-                        <th>Country</th>
-                        <th className="num-col total-col">Total</th>
-                        <th className="num-col live-col">Live</th>
-                        {nonLivePhases.map((phase) => (
-                          <th key={phase} className={`num-col phase-${phaseTone(phase)}`}>
-                            {phase}
-                          </th>
+              <section className="country-grid">
+                {byCountry.map((row) => (
+                  <div className="country-card" key={row.country}>
+                    <div className="country-card-header">
+                      <span className="country-flag">{flagFor(row.country)}</span>
+                      <div>
+                        <p className="country-name">{row.country}</p>
+                        <p className="country-total">
+                          {row.total} <span className="country-live">· {row.live} live</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="phase-badges">
+                      {nonLivePhases
+                        .filter((phase) => row.byPhase[phase])
+                        .map((phase) => (
+                          <span
+                            key={phase}
+                            className={`badge badge-${phaseTone(phase)}`}
+                          >
+                            {phase} <strong>{row.byPhase[phase]}</strong>
+                          </span>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {byCountry.map((row) => (
-                        <tr key={row.country}>
-                          <td className="site-name">
-                            {flagFor(row.country)} {row.country}
-                          </td>
-                          <td className="num-col total-col">{row.total}</td>
-                          <td className="num-col live-col">{row.live}</td>
-                          {nonLivePhases.map((phase) => (
-                            <td key={phase} className="num-col">
-                              {row.byPhase[phase] || "—"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td className="site-name">All countries</td>
-                        <td className="num-col total-col">{totals.total}</td>
-                        <td className="num-col live-col">{totals.live}</td>
-                        {nonLivePhases.map((phase) => (
-                          <td key={phase} className="num-col">
-                            {byCountry.reduce(
-                              (sum, row) => sum + (row.byPhase[phase] || 0),
-                              0
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                    </div>
+                  </div>
+                ))}
               </section>
 
-              {data && (
-                <p className="fetched-footer">
-                  Updated{" "}
-                  {new Date(data.fetchedAt).toLocaleString("en-GB", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </p>
-              )}
+              <p className="fetched-footer">
+                Updated{" "}
+                {new Date(data.fetchedAt).toLocaleString("en-GB", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </p>
             </>
           )}
         </main>
