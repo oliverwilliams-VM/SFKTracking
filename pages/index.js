@@ -328,7 +328,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>SFK — Part Subway Funded</title>
+        <title>Funded SFK Install Programme</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
@@ -347,7 +347,7 @@ export default function Home() {
               candidates={["/Subway.png", "/subway-logo.svg", "/subway-logo.png"]}
               alt="Subway"
             />
-            <span className="brand-name">SFK — Part Subway Funded</span>
+            <span className="brand-name">Funded SFK Install Programme</span>
           </div>
 
           <div className="topbar-right">

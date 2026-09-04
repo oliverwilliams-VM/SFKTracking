@@ -33,11 +33,11 @@ export default function Login() {
   return (
     <>
       <Head>
-        <title>SFK — Part Subway Funded</title>
+        <title>Funded SFK Install Programme</title>
       </Head>
       <div className="login-page">
         <form className="login-card" onSubmit={submit}>
-          <h1>SFK — Part Subway Funded</h1>
+          <h1>Funded SFK Install Programme</h1>
           <p className="login-sub">Enter the shared password to continue.</p>
           <input
             type="password"
