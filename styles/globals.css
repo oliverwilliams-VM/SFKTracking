@@ -377,20 +377,6 @@ body {
   gap: 0.5rem;
 }
 
-.phase-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 50%;
-  background: var(--panel-alt);
-  border: 1px solid var(--border);
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
 .phase-count {
   margin: 0;
   font-size: 1.7rem;
@@ -416,10 +402,6 @@ body {
 
 .phase-card.phase-bad .phase-count {
   color: var(--bad);
-}
-
-.phase-card.phase-bad .phase-step {
-  border-color: rgba(248, 113, 113, 0.4);
 }
 
 /* Country cards with wrapped phase badges - 2 per row, larger figures */
@@ -594,6 +576,130 @@ body {
   color: var(--ink-soft);
 }
 
+/* Charts */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 800px) {
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-panel h2 {
+  margin: 0 0 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.pipeline-chart-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 32px;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.6rem;
+}
+
+.pipeline-chart-label {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-chart-track {
+  background: var(--panel-alt);
+  border-radius: 4px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.pipeline-chart-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--ink-soft);
+  transition: width 0.3s ease;
+}
+
+.pipeline-chart-fill.fill-good {
+  background: var(--good);
+}
+
+.pipeline-chart-fill.fill-warn {
+  background: var(--warn);
+}
+
+.pipeline-chart-fill.fill-bad {
+  background: var(--bad);
+}
+
+.pipeline-chart-fill.fill-neutral {
+  background: var(--accent);
+}
+
+.pipeline-chart-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.country-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.1rem;
+  height: 160px;
+  padding-top: 0.5rem;
+}
+
+.country-chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.country-chart-bar-wrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.country-chart-bar {
+  width: 100%;
+  background: var(--panel-alt);
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+  min-height: 4px;
+  transition: height 0.3s ease;
+}
+
+.country-chart-bar-live {
+  width: 100%;
+  background: var(--live);
+  border-radius: 6px 6px 0 0;
+}
+
+.country-chart-total {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.country-chart-flag {
+  font-size: 1rem;
+  margin-top: 0.15rem;
+}
+
 .breakdown-panel {
   margin-bottom: 1.5rem;
 }
@@ -651,4 +757,55 @@ body {
   color: var(--ink-soft);
   font-size: 0.9rem;
   margin: 0;
+}
+
+.breakdown-note {
+  font-size: 0.82rem;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  margin: 0 0 1rem;
+}
+
+.breakdown-note code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.cancelled-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.cancelled-row {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.cancelled-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.3rem;
+}
+
+.cancelled-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.cancelled-country {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.cancelled-reason {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
 }

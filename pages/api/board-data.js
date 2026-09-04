@@ -12,7 +12,7 @@ export const config = {
 
 export default async function handler(req, res) {
   try {
-    const { boardName, items, hasInstallPhaseColumn, hasCountryColumn } = await fetchSfkItems();
+    const { boardName, items, hasInstallPhaseColumn, hasCountryColumn, hasReasonColumn } = await fetchSfkItems();
 
     // Cache at the edge for a minute so repeat loads within a session are
     // near-instant; stale-while-revalidate keeps it fresh in the background.
@@ -24,6 +24,7 @@ export default async function handler(req, res) {
       items,
       hasInstallPhaseColumn,
       hasCountryColumn,
+      hasReasonColumn,
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {

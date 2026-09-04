@@ -56,6 +56,55 @@ function splitPhaseLabel(phase) {
   return { step: null, label: phase };
 }
 
+// Simple CSS-bar charts - no charting library needed for two shapes this
+// straightforward, and it keeps styling consistent with the rest of the app.
+function PipelineChart({ entries }) {
+  const max = Math.max(1, ...entries.map(([, count]) => count));
+  return (
+    <div className="chart pipeline-chart">
+      {entries.map(([phase, count]) => (
+        <div className="pipeline-chart-row" key={phase}>
+          <span className="pipeline-chart-label">{splitPhaseLabel(phase).label}</span>
+          <div className="pipeline-chart-track">
+            <div
+              className={`pipeline-chart-fill fill-${phaseTone(phase)}`}
+              style={{ width: `${Math.max(3, (count / max) * 100)}%` }}
+            />
+          </div>
+          <span className="pipeline-chart-count">{count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CountryChart({ rows }) {
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  return (
+    <div className="chart country-chart">
+      {rows.map((row) => (
+        <div className="country-chart-col" key={row.country}>
+          <div className="country-chart-bar-wrap">
+            <div
+              className="country-chart-bar"
+              style={{ height: `${Math.max(4, (row.total / max) * 100)}%` }}
+            >
+              {row.live > 0 && (
+                <div
+                  className="country-chart-bar-live"
+                  style={{ height: `${(row.live / row.total) * 100}%` }}
+                />
+              )}
+            </div>
+          </div>
+          <span className="country-chart-total">{row.total}</span>
+          <span className="country-chart-flag">{flagFor(row.country)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function BouncingDots() {
   return (
     <span className="dots" aria-label="Loading">
@@ -246,20 +295,35 @@ export default function Home() {
   const [selectedKpi, setSelectedKpi] = useState(null);
 
   const selectedBreakdown = useMemo(() => {
-    if (!selectedKpi || !byCountry.length) return null;
+    if (!selectedKpi || !data) return null;
+
     if (selectedKpi === "__total__") {
       return {
+        type: "by-country",
         title: "Total sites by country",
         rows: byCountry.map((row) => ({ country: row.country, count: row.total })),
       };
     }
+
+    // Cancelled gets a different view: which stores, and why - a country
+    // count isn't useful for something you need to individually follow up.
+    if (phaseTone(selectedKpi) === "bad") {
+      const items = data.items.filter((item) => item.installPhase === selectedKpi);
+      return {
+        type: "cancelled-list",
+        title: `${splitPhaseLabel(selectedKpi).label} — stores and reasons`,
+        items,
+      };
+    }
+
     return {
+      type: "by-country",
       title: `${splitPhaseLabel(selectedKpi).label} by country`,
       rows: byCountry
         .map((row) => ({ country: row.country, count: row.byPhase[selectedKpi] || 0 }))
         .filter((r) => r.count > 0),
     };
-  }, [selectedKpi, byCountry]);
+  }, [selectedKpi, byCountry, data]);
 
   return (
     <>
@@ -408,7 +472,7 @@ export default function Home() {
 
               <section className="phase-overview-row">
                 {remainingPhases.map(([phase, count]) => {
-                  const { step, label } = splitPhaseLabel(phase);
+                  const { label } = splitPhaseLabel(phase);
                   return (
                     <button
                       type="button"
@@ -417,7 +481,6 @@ export default function Home() {
                       onClick={() => setSelectedKpi(selectedKpi === phase ? null : phase)}
                     >
                       <div className="phase-card-top">
-                        {step && <span className="phase-step">{step}</span>}
                         <p className="phase-count">{count}</p>
                       </div>
                       <p className="phase-name">{label}</p>
@@ -434,19 +497,54 @@ export default function Home() {
                       Close
                     </button>
                   </div>
-                  <div className="breakdown-rows">
-                    {selectedBreakdown.rows.map((row) => (
-                      <div className="breakdown-row" key={row.country}>
-                        <span>
-                          {flagFor(row.country)} {row.country}
-                        </span>
-                        <strong>{row.count}</strong>
+
+                  {selectedBreakdown.type === "by-country" && (
+                    <div className="breakdown-rows">
+                      {selectedBreakdown.rows.map((row) => (
+                        <div className="breakdown-row" key={row.country}>
+                          <span>
+                            {flagFor(row.country)} {row.country}
+                          </span>
+                          <strong>{row.count}</strong>
+                        </div>
+                      ))}
+                      {selectedBreakdown.rows.length === 0 && (
+                        <p className="breakdown-empty">No sites in this phase.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedBreakdown.type === "cancelled-list" && (
+                    <>
+                      {!data.hasReasonColumn && (
+                        <p className="breakdown-note">
+                          Couldn't find a reason/notes column on this board, so
+                          only store and country are shown below. If the board
+                          has one under a different name, update{" "}
+                          <code>REASON_TITLE_MATCH</code> in{" "}
+                          <code>lib/monday.js</code>.
+                        </p>
+                      )}
+                      <div className="cancelled-list">
+                        {selectedBreakdown.items.map((item) => (
+                          <div className="cancelled-row" key={item.id}>
+                            <div className="cancelled-row-top">
+                              <span className="cancelled-name">{item.name}</span>
+                              <span className="cancelled-country">
+                                {flagFor(item.country)} {item.country || "—"}
+                              </span>
+                            </div>
+                            <p className="cancelled-reason">
+                              {item.reason || "No reason recorded"}
+                            </p>
+                          </div>
+                        ))}
+                        {selectedBreakdown.items.length === 0 && (
+                          <p className="breakdown-empty">No cancelled sites.</p>
+                        )}
                       </div>
-                    ))}
-                    {selectedBreakdown.rows.length === 0 && (
-                      <p className="breakdown-empty">No sites in this phase.</p>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </section>
               )}
 
@@ -456,31 +554,16 @@ export default function Home() {
                 </p>
               )}
 
-              {staleItems.length > 0 && (
-                <section className="panel stale-panel">
-                  <h2>
-                    Needs attention{" "}
-                    <span className="stale-count">
-                      {staleItems.length} site{staleItems.length === 1 ? "" : "s"} untouched {STALE_DAYS}+ days
-                    </span>
-                  </h2>
-                  <div className="stale-list">
-                    {staleItems.slice(0, 12).map((item) => (
-                      <div className="stale-row" key={item.id}>
-                        <span className="stale-name">{item.name}</span>
-                        <span className="stale-meta">
-                          {flagFor(item.country)} {item.country || "—"} ·{" "}
-                          {splitPhaseLabel(item.installPhase).label || "Not set"}
-                        </span>
-                        <span className="stale-days">{item.daysSince}d</span>
-                      </div>
-                    ))}
-                  </div>
-                  {staleItems.length > 12 && (
-                    <p className="stale-more">+ {staleItems.length - 12} more</p>
-                  )}
-                </section>
-              )}
+              <section className="charts-row">
+                <div className="panel chart-panel">
+                  <h2>Pipeline overview</h2>
+                  <PipelineChart entries={phaseOverview} />
+                </div>
+                <div className="panel chart-panel">
+                  <h2>Sites by country</h2>
+                  <CountryChart rows={byCountry} />
+                </div>
+              </section>
 
               <section className="country-grid">
                 {byCountry.map((row) => (
@@ -514,6 +597,32 @@ export default function Home() {
                   </div>
                 ))}
               </section>
+
+              {staleItems.length > 0 && (
+                <section className="panel stale-panel">
+                  <h2>
+                    Needs attention{" "}
+                    <span className="stale-count">
+                      {staleItems.length} site{staleItems.length === 1 ? "" : "s"} untouched {STALE_DAYS}+ days
+                    </span>
+                  </h2>
+                  <div className="stale-list">
+                    {staleItems.slice(0, 12).map((item) => (
+                      <div className="stale-row" key={item.id}>
+                        <span className="stale-name">{item.name}</span>
+                        <span className="stale-meta">
+                          {flagFor(item.country)} {item.country || "—"} ·{" "}
+                          {splitPhaseLabel(item.installPhase).label || "Not set"}
+                        </span>
+                        <span className="stale-days">{item.daysSince}d</span>
+                      </div>
+                    ))}
+                  </div>
+                  {staleItems.length > 12 && (
+                    <p className="stale-more">+ {staleItems.length - 12} more</p>
+                  )}
+                </section>
+              )}
 
               <p className="fetched-footer">
                 Updated{" "}
