@@ -80,10 +80,26 @@ function Logo({ candidates, alt }) {
   );
 }
 
+// A site is flagged as needing attention if it hasn't been touched (any
+// field changed) in this many days and isn't already Live or Cancelled.
+const STALE_DAYS = 14;
+
+function daysSince(isoDate) {
+  if (!isoDate) return null;
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+const AUTO_REFRESH_KEY = "sfk-auto-refresh";
+const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 export default function Home() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState(null);
+  const [search, setSearch] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -110,7 +126,26 @@ export default function Home() {
 
   useEffect(() => {
     load();
+    fetch("/api/history")
+      .then((r) => r.json())
+      .then(setHistory)
+      .catch(() => setHistory(null));
   }, []);
+
+  // Auto-refresh: remember the toggle across visits, and only run the timer
+  // while it's actually on.
+  useEffect(() => {
+    const saved = window.localStorage.getItem(AUTO_REFRESH_KEY);
+    if (saved === "1") setAutoRefresh(true);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(AUTO_REFRESH_KEY, autoRefresh ? "1" : "0");
+    if (!autoRefresh) return;
+    const id = setInterval(load, AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh]);
 
   // Every distinct install phase seen, ordered as a pipeline (1, 2, 3...
   // Live, Cancelled) rather than by frequency.
@@ -178,6 +213,34 @@ export default function Home() {
     return { total: data.total, live };
   }, [data]);
 
+  // Sites that haven't been touched in a while and aren't already done
+  // (Live) or dead (Cancelled) - these are the ones worth someone chasing.
+  const staleItems = useMemo(() => {
+    if (!data) return [];
+    return data.items
+      .filter((item) => {
+        const tone = phaseTone(item.installPhase);
+        if (tone === "good" || tone === "bad") return false;
+        const days = daysSince(item.updatedAt);
+        return days !== null && days >= STALE_DAYS;
+      })
+      .map((item) => ({ ...item, daysSince: daysSince(item.updatedAt) }))
+      .sort((a, b) => b.daysSince - a.daysSince);
+  }, [data]);
+
+  const searchResults = useMemo(() => {
+    if (!data || !search.trim()) return [];
+    const q = search.trim().toLowerCase();
+    return data.items.filter((item) => item.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [data, search]);
+
+  const trendFor = (kind) => {
+    if (!history?.enabled || !history.points?.length) return null;
+    return history.points
+      .map((p) => ({ label: p.label, value: p[kind] }))
+      .filter((p) => typeof p.value === "number");
+  };
+
   // Which KPI card is expanded for a by-country breakdown - "__total__" for
   // the Total card, a phase string for a phase card, or null for none.
   const [selectedKpi, setSelectedKpi] = useState(null);
@@ -224,14 +287,37 @@ export default function Home() {
           </div>
 
           <div className="topbar-right">
-            <div className="stat-block">
-              <p className="stat-label">Total sites</p>
-              <p className="stat-value">{data ? data.total : "—"}</p>
+            <div className="search-box">
+              <input
+                type="text"
+                placeholder="Find a site…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {searchResults.length > 0 && (
+                <div className="search-results">
+                  {searchResults.map((item) => (
+                    <div className="search-result" key={item.id}>
+                      <span className="search-result-name">{item.name}</span>
+                      <span className="search-result-meta">
+                        {flagFor(item.country)} {item.country || "—"} ·{" "}
+                        {splitPhaseLabel(item.installPhase).label || "Not set"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="stat-block stat-live">
-              <p className="stat-label">Live</p>
-              <p className="stat-value">{data ? totals.live : "—"}</p>
-            </div>
+
+            <button
+              type="button"
+              className={`auto-refresh-toggle ${autoRefresh ? "auto-refresh-on" : ""}`}
+              onClick={() => setAutoRefresh((v) => !v)}
+              title="Auto-refresh every 5 minutes"
+            >
+              <span className="auto-refresh-dot" /> Auto-refresh
+            </button>
+
             <button className="refresh" onClick={load} disabled={loading}>
               {loading ? <BouncingDots /> : "Refresh"}
             </button>
@@ -275,6 +361,15 @@ export default function Home() {
                 >
                   <p className="phase-count">{totals.total}</p>
                   <p className="phase-name">Total available sites</p>
+                  {trendFor("total") && (
+                    <div className="trend-row">
+                      {trendFor("total").map((t) => (
+                        <span className="trend-chip" key={t.label}>
+                          {t.value} <span className="trend-chip-label">{t.label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </button>
 
                 {liveEntry && (
@@ -285,6 +380,15 @@ export default function Home() {
                   >
                     <p className="phase-count">{liveEntry[1]}</p>
                     <p className="phase-name">Live</p>
+                    {trendFor("live") && (
+                      <div className="trend-row">
+                        {trendFor("live").map((t) => (
+                          <span className="trend-chip" key={t.label}>
+                            {t.value} <span className="trend-chip-label">{t.label}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </button>
                 )}
 
@@ -346,6 +450,38 @@ export default function Home() {
                 </section>
               )}
 
+              {history?.building && (
+                <p className="history-building-note">
+                  Trend history started tracking today — comparisons will appear once a few weeks have passed.
+                </p>
+              )}
+
+              {staleItems.length > 0 && (
+                <section className="panel stale-panel">
+                  <h2>
+                    Needs attention{" "}
+                    <span className="stale-count">
+                      {staleItems.length} site{staleItems.length === 1 ? "" : "s"} untouched {STALE_DAYS}+ days
+                    </span>
+                  </h2>
+                  <div className="stale-list">
+                    {staleItems.slice(0, 12).map((item) => (
+                      <div className="stale-row" key={item.id}>
+                        <span className="stale-name">{item.name}</span>
+                        <span className="stale-meta">
+                          {flagFor(item.country)} {item.country || "—"} ·{" "}
+                          {splitPhaseLabel(item.installPhase).label || "Not set"}
+                        </span>
+                        <span className="stale-days">{item.daysSince}d</span>
+                      </div>
+                    ))}
+                  </div>
+                  {staleItems.length > 12 && (
+                    <p className="stale-more">+ {staleItems.length - 12} more</p>
+                  )}
+                </section>
+              )}
+
               <section className="country-grid">
                 {byCountry.map((row) => (
                   <div className="country-card" key={row.country}>
@@ -364,12 +500,14 @@ export default function Home() {
                         .map((phase) => {
                           const { label } = splitPhaseLabel(phase);
                           return (
-                            <span
+                            <button
+                              type="button"
                               key={phase}
-                              className={`badge badge-${phaseTone(phase)}`}
+                              className={`badge badge-${phaseTone(phase)} ${selectedKpi === phase ? "badge-active" : ""}`}
+                              onClick={() => setSelectedKpi(selectedKpi === phase ? null : phase)}
                             >
                               {label} <strong>{row.byPhase[phase]}</strong>
-                            </span>
+                            </button>
                           );
                         })}
                     </div>
