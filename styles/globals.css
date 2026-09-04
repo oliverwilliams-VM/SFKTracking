@@ -211,16 +211,37 @@ body {
   color: var(--ink);
 }
 
-/* Phase overview KPI row - single line; scrolls horizontally only if it
-   genuinely doesn't fit, rather than wrapping awkwardly. */
+/* Headline KPI row - Total, Live, Installing */
+.kpi-headline-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.phase-card-headline {
+  min-height: 96px;
+  padding: 1.25rem 1.4rem;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.phase-card-headline .phase-count {
+  font-size: 2.2rem;
+}
+
+.phase-card-headline .phase-name {
+  font-size: 0.9rem;
+  margin-top: 0;
+}
+
+/* Secondary KPI row - the rest of the pipeline, wraps across lines rather
+   than scrolling, so it's all visible at a glance. */
 .phase-overview-row {
   display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   margin-bottom: 1.5rem;
-  padding-bottom: 0.35rem;
-  scrollbar-width: thin;
 }
 
 .phase-card {
@@ -230,7 +251,8 @@ body {
   padding: 1rem 1.1rem;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: border-color 0.15s ease, transform 0.15s ease;
-  flex: 0 0 148px;
+  flex: 1 1 150px;
+  min-width: 150px;
   min-height: 84px;
   display: flex;
   flex-direction: column;

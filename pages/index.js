@@ -154,6 +154,22 @@ export default function Home() {
     return sortByPipeline(Object.keys(counts)).map((phase) => [phase, counts[phase]]);
   }, [data]);
 
+  // Live and Installing lead the KPI row as headline figures; everything
+  // else (the rest of the pipeline, plus Cancelled) sits below, wrapping
+  // across lines rather than a single scrolling row.
+  const liveEntry = useMemo(
+    () => phaseOverview.find(([phase]) => phase.toLowerCase().includes(LIVE_KEYWORD)),
+    [phaseOverview]
+  );
+  const installingEntry = useMemo(
+    () => phaseOverview.find(([phase]) => splitPhaseLabel(phase).label.toLowerCase() === "installing"),
+    [phaseOverview]
+  );
+  const remainingPhases = useMemo(
+    () => phaseOverview.filter(([phase]) => phase !== liveEntry?.[0] && phase !== installingEntry?.[0]),
+    [phaseOverview, liveEntry, installingEntry]
+  );
+
   const totals = useMemo(() => {
     if (!data) return { total: 0, live: 0 };
     const live = data.items.filter((item) =>
@@ -249,21 +265,45 @@ export default function Home() {
                 </div>
               )}
 
-              <section className="phase-overview-row">
+              <section className="kpi-headline-row">
                 <button
                   type="button"
-                  className={`phase-card phase-total ${selectedKpi === "__total__" ? "phase-card-active" : ""}`}
+                  className={`phase-card phase-card-headline phase-total ${selectedKpi === "__total__" ? "phase-card-active" : ""}`}
                   onClick={() =>
                     setSelectedKpi(selectedKpi === "__total__" ? null : "__total__")
                   }
                 >
-                  <div className="phase-card-top">
-                    <p className="phase-count">{totals.total}</p>
-                  </div>
-                  <p className="phase-name">Total sites</p>
+                  <p className="phase-count">{totals.total}</p>
+                  <p className="phase-name">Total available sites</p>
                 </button>
 
-                {phaseOverview.map(([phase, count]) => {
+                {liveEntry && (
+                  <button
+                    type="button"
+                    className={`phase-card phase-card-headline phase-good ${selectedKpi === liveEntry[0] ? "phase-card-active" : ""}`}
+                    onClick={() => setSelectedKpi(selectedKpi === liveEntry[0] ? null : liveEntry[0])}
+                  >
+                    <p className="phase-count">{liveEntry[1]}</p>
+                    <p className="phase-name">Live</p>
+                  </button>
+                )}
+
+                {installingEntry && (
+                  <button
+                    type="button"
+                    className={`phase-card phase-card-headline phase-${phaseTone(installingEntry[0])} ${selectedKpi === installingEntry[0] ? "phase-card-active" : ""}`}
+                    onClick={() =>
+                      setSelectedKpi(selectedKpi === installingEntry[0] ? null : installingEntry[0])
+                    }
+                  >
+                    <p className="phase-count">{installingEntry[1]}</p>
+                    <p className="phase-name">Installing</p>
+                  </button>
+                )}
+              </section>
+
+              <section className="phase-overview-row">
+                {remainingPhases.map(([phase, count]) => {
                   const { step, label } = splitPhaseLabel(phase);
                   return (
                     <button
