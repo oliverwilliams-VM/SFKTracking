@@ -84,8 +84,8 @@ const DONUT_COLORS = ["#8b5cf6", "#2dd4bf", "#fbbf24", "#f87171", "#60a5fa", "#f
 
 function DonutChart({ rows }) {
   const total = rows.reduce((sum, r) => sum + r.total, 0) || 1;
-  const size = 180;
-  const strokeWidth = 30;
+  const size = 220;
+  const strokeWidth = 34;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -106,7 +106,7 @@ function DonutChart({ rows }) {
 
   return (
     <div className="donut-wrap">
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="donut-svg">
+      <svg viewBox={`0 0 ${size} ${size}`} className="donut-svg">
         <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
           <circle
             cx={size / 2}
