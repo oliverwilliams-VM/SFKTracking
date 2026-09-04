@@ -27,9 +27,33 @@ function flagFor(country) {
 function phaseTone(phase) {
   const v = (phase || "").toLowerCase();
   if (v.includes(LIVE_KEYWORD)) return "good";
+  if (v.includes("cancelled") || v.includes("canceled")) return "bad";
   if (/(risk|blocked|delay|issue|hold|awaiting)/.test(v)) return "warn";
   if (v === "" || v === "not set") return "empty";
   return "neutral";
+}
+
+// Sorts phases as a pipeline (1, 2, 3... then Live, then Cancelled last) so
+// the KPI row reads as a funnel left-to-right instead of by raw frequency.
+function phaseSortKey(phase) {
+  const v = (phase || "").toLowerCase();
+  const numbered = phase.match(/^(\d+)\./);
+  if (numbered) return parseInt(numbered[1], 10);
+  if (v.includes(LIVE_KEYWORD)) return 900;
+  if (v.includes("cancelled") || v.includes("canceled")) return 999;
+  return 500;
+}
+
+function sortByPipeline(phases) {
+  return [...phases].sort((a, b) => phaseSortKey(a) - phaseSortKey(b));
+}
+
+// Splits a phase label like "4. HW Placement Approval" into its step number
+// and the readable name, so the number can render as a small badge.
+function splitPhaseLabel(phase) {
+  const match = (phase || "").match(/^(\d+)\.\s*(.*)$/);
+  if (match) return { step: match[1], label: match[2] };
+  return { step: null, label: phase };
 }
 
 function BouncingDots() {
@@ -42,11 +66,19 @@ function BouncingDots() {
   );
 }
 
-function Logo({ src, alt }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} className="logo" onError={() => setFailed(true)} />;
+function Logo({ base, alt }) {
+  const candidates = [`${base}.svg`, `${base}.png`, `${base}.jpg`];
+  const [index, setIndex] = useState(0);
+  if (index >= candidates.length) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={candidates[index]}
+      alt={alt}
+      className="logo"
+      onError={() => setIndex((i) => i + 1)}
+    />
+  );
 }
 
 export default function Home() {
@@ -81,17 +113,13 @@ export default function Home() {
     load();
   }, []);
 
-  // Every distinct install phase seen, most common first.
+  // Every distinct install phase seen, ordered as a pipeline (1, 2, 3...
+  // Live, Cancelled) rather than by frequency.
   const allPhases = useMemo(() => {
     if (!data) return [];
-    const counts = {};
-    data.items.forEach((item) => {
-      const v = item.installPhase || "Not set";
-      counts[v] = (counts[v] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([phase]) => phase);
+    const seen = new Set();
+    data.items.forEach((item) => seen.add(item.installPhase || "Not set"));
+    return sortByPipeline([...seen]);
   }, [data]);
 
   const nonLivePhases = useMemo(
@@ -124,7 +152,7 @@ export default function Home() {
       const v = item.installPhase || "Not set";
       counts[v] = (counts[v] || 0) + 1;
     });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return sortByPipeline(Object.keys(counts)).map((phase) => [phase, counts[phase]]);
   }, [data]);
 
   const totals = useMemo(() => {
@@ -134,6 +162,26 @@ export default function Home() {
     ).length;
     return { total: data.total, live };
   }, [data]);
+
+  // Which KPI card is expanded for a by-country breakdown - "__total__" for
+  // the Total card, a phase string for a phase card, or null for none.
+  const [selectedKpi, setSelectedKpi] = useState(null);
+
+  const selectedBreakdown = useMemo(() => {
+    if (!selectedKpi || !byCountry.length) return null;
+    if (selectedKpi === "__total__") {
+      return {
+        title: "Total sites by country",
+        rows: byCountry.map((row) => ({ country: row.country, count: row.total })),
+      };
+    }
+    return {
+      title: `${splitPhaseLabel(selectedKpi).label} by country`,
+      rows: byCountry
+        .map((row) => ({ country: row.country, count: row.byPhase[selectedKpi] || 0 }))
+        .filter((r) => r.count > 0),
+    };
+  }, [selectedKpi, byCountry]);
 
   return (
     <>
@@ -149,8 +197,8 @@ export default function Home() {
       <div className="page">
         <header className="topbar">
           <div className="brand">
-            <Logo src="/vita-mojo-logo.svg" alt="Vita Mojo" />
-            <Logo src="/subway-logo.svg" alt="Subway" />
+            <Logo base="/vita-mojo-logo" alt="Vita Mojo" />
+            <Logo base="/subway-logo" alt="Subway" />
             <span className="brand-name">SFK — Part Subway Funded</span>
           </div>
 
@@ -197,13 +245,61 @@ export default function Home() {
               )}
 
               <section className="phase-overview-row">
-                {phaseOverview.map(([phase, count]) => (
-                  <div className={`phase-card phase-${phaseTone(phase)}`} key={phase}>
-                    <p className="phase-count">{count}</p>
-                    <p className="phase-name">{phase}</p>
+                <button
+                  type="button"
+                  className={`phase-card phase-total ${selectedKpi === "__total__" ? "phase-card-active" : ""}`}
+                  onClick={() =>
+                    setSelectedKpi(selectedKpi === "__total__" ? null : "__total__")
+                  }
+                >
+                  <div className="phase-card-top">
+                    <p className="phase-count">{totals.total}</p>
                   </div>
-                ))}
+                  <p className="phase-name">Total sites</p>
+                </button>
+
+                {phaseOverview.map(([phase, count]) => {
+                  const { step, label } = splitPhaseLabel(phase);
+                  return (
+                    <button
+                      type="button"
+                      className={`phase-card phase-${phaseTone(phase)} ${selectedKpi === phase ? "phase-card-active" : ""}`}
+                      key={phase}
+                      onClick={() => setSelectedKpi(selectedKpi === phase ? null : phase)}
+                    >
+                      <div className="phase-card-top">
+                        {step && <span className="phase-step">{step}</span>}
+                        <p className="phase-count">{count}</p>
+                      </div>
+                      <p className="phase-name">{label}</p>
+                    </button>
+                  );
+                })}
               </section>
+
+              {selectedBreakdown && (
+                <section className="panel breakdown-panel">
+                  <div className="breakdown-header">
+                    <h2>{selectedBreakdown.title}</h2>
+                    <button className="breakdown-close" onClick={() => setSelectedKpi(null)}>
+                      Close
+                    </button>
+                  </div>
+                  <div className="breakdown-rows">
+                    {selectedBreakdown.rows.map((row) => (
+                      <div className="breakdown-row" key={row.country}>
+                        <span>
+                          {flagFor(row.country)} {row.country}
+                        </span>
+                        <strong>{row.count}</strong>
+                      </div>
+                    ))}
+                    {selectedBreakdown.rows.length === 0 && (
+                      <p className="breakdown-empty">No sites in this phase.</p>
+                    )}
+                  </div>
+                </section>
+              )}
 
               <section className="country-grid">
                 {byCountry.map((row) => (
@@ -220,14 +316,17 @@ export default function Home() {
                     <div className="phase-badges">
                       {nonLivePhases
                         .filter((phase) => row.byPhase[phase])
-                        .map((phase) => (
-                          <span
-                            key={phase}
-                            className={`badge badge-${phaseTone(phase)}`}
-                          >
-                            {phase} <strong>{row.byPhase[phase]}</strong>
-                          </span>
-                        ))}
+                        .map((phase) => {
+                          const { label } = splitPhaseLabel(phase);
+                          return (
+                            <span
+                              key={phase}
+                              className={`badge badge-${phaseTone(phase)}`}
+                            >
+                              {label} <strong>{row.byPhase[phase]}</strong>
+                            </span>
+                          );
+                        })}
                     </div>
                   </div>
                 ))}
