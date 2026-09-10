@@ -649,23 +649,13 @@ export default function Home() {
                         </p>
                       </div>
                     </div>
-                    <div className="phase-badges">
-                      {nonLivePhases
+                    <PipelineChart
+                      entries={nonLivePhases
                         .filter((phase) => row.byPhase[phase])
-                        .map((phase) => {
-                          const { label } = splitPhaseLabel(phase);
-                          return (
-                            <button
-                              type="button"
-                              key={phase}
-                              className={`badge badge-${phaseTone(phase)} ${selectedKpi === phase ? "badge-active" : ""}`}
-                              onClick={() => setSelectedKpi(selectedKpi === phase ? null : phase)}
-                            >
-                              {label} <strong>{row.byPhase[phase]}</strong>
-                            </button>
-                          );
-                        })}
-                    </div>
+                        .map((phase) => [phase, row.byPhase[phase]])}
+                      selected={selectedKpi}
+                      onSelect={setSelectedKpi}
+                    />
                   </div>
                 ))}
               </section>
