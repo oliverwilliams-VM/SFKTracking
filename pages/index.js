@@ -85,6 +85,34 @@ function PipelineChart({ entries, selected, onSelect }) {
   );
 }
 
+// Same bar-chart shape as PipelineChart above, reused for by-country
+// breakdowns so the "click a KPI, see the split" panel is visual rather
+// than a plain list of numbers. Not clickable (no onSelect) since there's
+// nothing further to drill into from a country row.
+function CountryBarChart({ rows }) {
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <div className="chart pipeline-chart">
+      {rows.map((row) => (
+        <div className="pipeline-chart-row" key={row.country}>
+          <div className="pipeline-chart-top">
+            <span className="pipeline-chart-label">
+              {flagFor(row.country)} {row.country}
+            </span>
+            <span className="pipeline-chart-count">{row.count}</span>
+          </div>
+          <div className="pipeline-chart-track">
+            <div
+              className="pipeline-chart-fill fill-neutral"
+              style={{ width: `${Math.max(3, (row.count / max) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const DONUT_COLORS = ["#8b5cf6", "#2dd4bf", "#fbbf24", "#f87171", "#60a5fa", "#f472b6", "#34d399", "#c084fc"];
 
 function DonutChart({ rows }) {
@@ -546,19 +574,12 @@ export default function Home() {
                   </div>
 
                   {selectedBreakdown.type === "by-country" && (
-                    <div className="breakdown-rows">
-                      {selectedBreakdown.rows.map((row) => (
-                        <div className="breakdown-row" key={row.country}>
-                          <span>
-                            {flagFor(row.country)} {row.country}
-                          </span>
-                          <strong>{row.count}</strong>
-                        </div>
-                      ))}
+                    <>
+                      <CountryBarChart rows={selectedBreakdown.rows} />
                       {selectedBreakdown.rows.length === 0 && (
                         <p className="breakdown-empty">No sites in this phase.</p>
                       )}
-                    </div>
+                    </>
                   )}
 
                   {selectedBreakdown.type === "cancelled-list" && (
