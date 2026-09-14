@@ -113,6 +113,63 @@ function CountryBarChart({ rows }) {
   );
 }
 
+function BreakdownPanel({ breakdown, hasReasonColumn, onClose }) {
+  if (!breakdown) return null;
+  return (
+    <section className="panel breakdown-panel">
+      <div className="breakdown-header">
+        <h2>{breakdown.title}</h2>
+        <button className="breakdown-close" onClick={onClose}>
+          Close
+        </button>
+      </div>
+
+      {breakdown.type === "by-country" && (
+        <>
+          <CountryBarChart rows={breakdown.rows} />
+          {breakdown.rows.length === 0 && (
+            <p className="breakdown-empty">No sites in this phase.</p>
+          )}
+        </>
+      )}
+
+      {breakdown.type === "site-list" && (
+        <>
+          {breakdown.showReason && !hasReasonColumn && (
+            <p className="breakdown-note">
+              Couldn't find a reason/notes column on this board, so
+              only store and country are shown below. If the board
+              has one under a different name, update{" "}
+              <code>REASON_TITLE_MATCH</code> in{" "}
+              <code>lib/monday.js</code>.
+            </p>
+          )}
+          <div className="cancelled-list">
+            {breakdown.items.map((item) => (
+              <div className="cancelled-row" key={item.id}>
+                <div className="cancelled-row-top">
+                  <span className="cancelled-name">{item.name}</span>
+                  <span className="cancelled-country">
+                    {flagFor(item.country)} {item.country || "—"}
+                  </span>
+                </div>
+                {breakdown.showReason && (
+                  <p className="cancelled-reason">
+                    {item.reason || "No reason recorded"}
+                  </p>
+                )}
+              </div>
+            ))}
+            {breakdown.items.length === 0 && (
+              <p className="breakdown-empty">No sites in this phase.</p>
+            )}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 const DONUT_COLORS = ["#8b5cf6", "#2dd4bf", "#fbbf24", "#f87171", "#60a5fa", "#f472b6", "#34d399", "#c084fc"];
 
 function DonutChart({ rows }) {
@@ -574,58 +631,12 @@ export default function Home() {
                 )}
               </section>
 
-              {selectedBreakdown && (
-                <section className="panel breakdown-panel">
-                  <div className="breakdown-header">
-                    <h2>{selectedBreakdown.title}</h2>
-                    <button className="breakdown-close" onClick={() => { setSelectedKpi(null); setSelectedCountry(null); }}>
-                      Close
-                    </button>
-                  </div>
-
-                  {selectedBreakdown.type === "by-country" && (
-                    <>
-                      <CountryBarChart rows={selectedBreakdown.rows} />
-                      {selectedBreakdown.rows.length === 0 && (
-                        <p className="breakdown-empty">No sites in this phase.</p>
-                      )}
-                    </>
-                  )}
-
-                  {selectedBreakdown.type === "site-list" && (
-                    <>
-                      {selectedBreakdown.showReason && !data.hasReasonColumn && (
-                        <p className="breakdown-note">
-                          Couldn't find a reason/notes column on this board, so
-                          only store and country are shown below. If the board
-                          has one under a different name, update{" "}
-                          <code>REASON_TITLE_MATCH</code> in{" "}
-                          <code>lib/monday.js</code>.
-                        </p>
-                      )}
-                      <div className="cancelled-list">
-                        {selectedBreakdown.items.map((item) => (
-                          <div className="cancelled-row" key={item.id}>
-                            <div className="cancelled-row-top">
-                              <span className="cancelled-name">{item.name}</span>
-                              <span className="cancelled-country">
-                                {flagFor(item.country)} {item.country || "—"}
-                              </span>
-                            </div>
-                            {selectedBreakdown.showReason && (
-                              <p className="cancelled-reason">
-                                {item.reason || "No reason recorded"}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                        {selectedBreakdown.items.length === 0 && (
-                          <p className="breakdown-empty">No sites in this phase.</p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </section>
+              {!selectedCountry && (
+                <BreakdownPanel
+                  breakdown={selectedBreakdown}
+                  hasReasonColumn={data.hasReasonColumn}
+                  onClose={() => { setSelectedKpi(null); setSelectedCountry(null); }}
+                />
               )}
 
               {history?.building && (
@@ -678,6 +689,13 @@ export default function Home() {
                         setSelectedCountry(phase ? row.country : null);
                       }}
                     />
+                    {selectedCountry === row.country && (
+                      <BreakdownPanel
+                        breakdown={selectedBreakdown}
+                        hasReasonColumn={data.hasReasonColumn}
+                        onClose={() => { setSelectedKpi(null); setSelectedCountry(null); }}
+                      />
+                    )}
                   </div>
                 ))}
               </section>
