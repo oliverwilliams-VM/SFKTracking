@@ -385,6 +385,11 @@ export default function Home() {
   // Which KPI card is expanded for a by-country breakdown - "__total__" for
   // the Total card, a phase string for a phase card, or null for none.
   const [selectedKpi, setSelectedKpi] = useState(null);
+  // When set, scopes the phase breakdown below to just this country's own
+  // sites \u2014 set when a phase is clicked from within a specific country's
+  // card, cleared when clicked from the aggregate Pipeline overview or the
+  // headline cards.
+  const [selectedCountry, setSelectedCountry] = useState(null);
 
   const selectedBreakdown = useMemo(() => {
     if (!selectedKpi || !data) return null;
@@ -397,25 +402,25 @@ export default function Home() {
       };
     }
 
-    // Cancelled gets a different view: which stores, and why - a country
-    // count isn't useful for something you need to individually follow up.
-    if (phaseTone(selectedKpi) === "bad") {
-      const items = data.items.filter((item) => item.installPhase === selectedKpi);
-      return {
-        type: "cancelled-list",
-        title: `${splitPhaseLabel(selectedKpi).label} — stores and reasons`,
-        items,
-      };
-    }
-
+    // Every other phase (not just Cancelled) now shows the actual site
+    // list rather than just a country count \u2014 and if a specific country's
+    // card triggered this, the list is scoped to just that country.
+    const items = data.items.filter(
+      (item) =>
+        item.installPhase === selectedKpi &&
+        (!selectedCountry || item.country === selectedCountry)
+    );
+    const { label } = splitPhaseLabel(selectedKpi);
+    const showReason = phaseTone(selectedKpi) === "bad";
     return {
-      type: "by-country",
-      title: `${splitPhaseLabel(selectedKpi).label} by country`,
-      rows: byCountry
-        .map((row) => ({ country: row.country, count: row.byPhase[selectedKpi] || 0 }))
-        .filter((r) => r.count > 0),
+      type: "site-list",
+      title: selectedCountry
+        ? `${label} \u2014 ${selectedCountry} (${items.length})`
+        : `${label} \u2014 all sites (${items.length})`,
+      items,
+      showReason,
     };
-  }, [selectedKpi, byCountry, data]);
+  }, [selectedKpi, selectedCountry, byCountry, data]);
 
   return (
     <>
@@ -513,9 +518,10 @@ export default function Home() {
                 <button
                   type="button"
                   className={`phase-card phase-card-headline phase-total ${selectedKpi === "__total__" ? "phase-card-active" : ""}`}
-                  onClick={() =>
-                    setSelectedKpi(selectedKpi === "__total__" ? null : "__total__")
-                  }
+                  onClick={() => {
+                    setSelectedKpi(selectedKpi === "__total__" ? null : "__total__");
+                    setSelectedCountry(null);
+                  }}
                 >
                   <p className="phase-count">{totals.total}</p>
                   <p className="phase-name">Total available sites</p>
@@ -534,7 +540,10 @@ export default function Home() {
                   <button
                     type="button"
                     className={`phase-card phase-card-headline phase-good ${selectedKpi === liveEntry[0] ? "phase-card-active" : ""}`}
-                    onClick={() => setSelectedKpi(selectedKpi === liveEntry[0] ? null : liveEntry[0])}
+                    onClick={() => {
+                      setSelectedKpi(selectedKpi === liveEntry[0] ? null : liveEntry[0]);
+                      setSelectedCountry(null);
+                    }}
                   >
                     <p className="phase-count">{liveEntry[1]}</p>
                     <p className="phase-name">Live</p>
@@ -554,9 +563,10 @@ export default function Home() {
                   <button
                     type="button"
                     className={`phase-card phase-card-headline phase-${phaseTone(installingEntry[0])} ${selectedKpi === installingEntry[0] ? "phase-card-active" : ""}`}
-                    onClick={() =>
-                      setSelectedKpi(selectedKpi === installingEntry[0] ? null : installingEntry[0])
-                    }
+                    onClick={() => {
+                      setSelectedKpi(selectedKpi === installingEntry[0] ? null : installingEntry[0]);
+                      setSelectedCountry(null);
+                    }}
                   >
                     <p className="phase-count">{installingEntry[1]}</p>
                     <p className="phase-name">Installing</p>
@@ -568,7 +578,7 @@ export default function Home() {
                 <section className="panel breakdown-panel">
                   <div className="breakdown-header">
                     <h2>{selectedBreakdown.title}</h2>
-                    <button className="breakdown-close" onClick={() => setSelectedKpi(null)}>
+                    <button className="breakdown-close" onClick={() => { setSelectedKpi(null); setSelectedCountry(null); }}>
                       Close
                     </button>
                   </div>
@@ -582,9 +592,9 @@ export default function Home() {
                     </>
                   )}
 
-                  {selectedBreakdown.type === "cancelled-list" && (
+                  {selectedBreakdown.type === "site-list" && (
                     <>
-                      {!data.hasReasonColumn && (
+                      {selectedBreakdown.showReason && !data.hasReasonColumn && (
                         <p className="breakdown-note">
                           Couldn't find a reason/notes column on this board, so
                           only store and country are shown below. If the board
@@ -602,13 +612,15 @@ export default function Home() {
                                 {flagFor(item.country)} {item.country || "—"}
                               </span>
                             </div>
-                            <p className="cancelled-reason">
-                              {item.reason || "No reason recorded"}
-                            </p>
+                            {selectedBreakdown.showReason && (
+                              <p className="cancelled-reason">
+                                {item.reason || "No reason recorded"}
+                              </p>
+                            )}
                           </div>
                         ))}
                         {selectedBreakdown.items.length === 0 && (
-                          <p className="breakdown-empty">No cancelled sites.</p>
+                          <p className="breakdown-empty">No sites in this phase.</p>
                         )}
                       </div>
                     </>
@@ -625,7 +637,14 @@ export default function Home() {
               <section className="charts-row">
                 <div className="panel chart-panel">
                   <h2>Pipeline overview</h2>
-                  <PipelineChart entries={phaseOverview} selected={selectedKpi} onSelect={setSelectedKpi} />
+                  <PipelineChart
+                    entries={phaseOverview}
+                    selected={!selectedCountry ? selectedKpi : null}
+                    onSelect={(phase) => {
+                      setSelectedKpi(phase);
+                      setSelectedCountry(null);
+                    }}
+                  />
                 </div>
                 <div className="panel chart-panel">
                   <h2>Sites by country</h2>
@@ -653,8 +672,11 @@ export default function Home() {
                       entries={nonLivePhases
                         .filter((phase) => row.byPhase[phase])
                         .map((phase) => [phase, row.byPhase[phase]])}
-                      selected={selectedKpi}
-                      onSelect={setSelectedKpi}
+                      selected={selectedCountry === row.country ? selectedKpi : null}
+                      onSelect={(phase) => {
+                        setSelectedKpi(phase);
+                        setSelectedCountry(phase ? row.country : null);
+                      }}
                     />
                   </div>
                 ))}
