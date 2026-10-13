@@ -1023,3 +1023,37 @@ body {
 .forecast-card-row.total .forecast-card-value {
   color: var(--accent);
 }
+
+.ledger-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.ledger-card {
+  border: 1px solid var(--border);
+  transition: border-color 0.15s ease;
+}
+
+.ledger-card-bad {
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.ledger-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+
+.ledger-card-head h3 {
+  margin: 0;
+}
+
+.ledger-card-balance {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-grid .forecast-card-row.total .forecast-card-value:not(.stock-cell-good):not(.stock-cell-bad) {
+  color: var(--accent);
+}

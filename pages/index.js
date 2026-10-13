@@ -921,43 +921,50 @@ export default function Home() {
                 ) : !stock || !data ? (
                   <p className="loading-panel">Loading…</p>
                 ) : (
-                  <div className="stock-table-wrap">
-                    <table className="stock-table ledger-table">
-                      <thead>
-                        <tr>
-                          <th rowSpan={2}>Hardware</th>
-                          <th colSpan={3}>🇬🇧 UK</th>
-                          <th colSpan={3}>🌍 EMEA</th>
-                          <th colSpan={3}>Total</th>
-                        </tr>
-                        <tr>
-                          {["UK", "EMEA", "Total"].flatMap((bucket) =>
-                            ["Opening", "Used", "Balance"].map((label) => (
-                              <th key={`${bucket}-${label}`} className="ledger-sub-th">
-                                {label}
-                              </th>
-                            ))
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {swFundedLedger?.rows.map((row) => (
-                          <tr key={row.type}>
-                            <td className="stock-type-cell">{row.type}</td>
-                            {row.buckets.flatMap((b) => [
-                              <td key={`${row.type}-${b.bucket}-o`}>{b.opening}</td>,
-                              <td key={`${row.type}-${b.bucket}-u`}>{b.used}</td>,
-                              <td
-                                key={`${row.type}-${b.bucket}-bal`}
-                                className={b.balance < 0 ? "stock-cell-bad" : "stock-cell-good"}
+                  <div className="forecast-grid ledger-grid">
+                    {swFundedLedger?.rows.map((row) => {
+                      const totalBucket = row.buckets.find((b) => b.bucket === "Total");
+                      return (
+                        <div
+                          className={`forecast-card ledger-card${totalBucket.balance < 0 ? " ledger-card-bad" : ""}`}
+                          key={row.type}
+                        >
+                          <div className="ledger-card-head">
+                            <h3>{row.type}</h3>
+                            <span
+                              className={`ledger-card-balance ${totalBucket.balance < 0 ? "stock-cell-bad" : "stock-cell-good"}`}
+                            >
+                              {totalBucket.balance}
+                            </span>
+                          </div>
+                          <div className="forecast-card-table">
+                            <div className="forecast-card-row forecast-card-head">
+                              <span></span>
+                              <span>Opening</span>
+                              <span>Used</span>
+                              <span>Balance</span>
+                            </div>
+                            {row.buckets.map((b) => (
+                              <div
+                                className={`forecast-card-row${b.bucket === "Total" ? " total" : ""}`}
+                                key={b.bucket}
                               >
-                                <strong>{b.balance}</strong>
-                              </td>,
-                            ])}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                <span className="forecast-card-country">
+                                  {b.bucket === "UK" ? "🇬🇧 UK" : b.bucket === "EMEA" ? "🌍 EMEA" : "Total"}
+                                </span>
+                                <span className="forecast-card-value">{b.opening}</span>
+                                <span className="forecast-card-value">{b.used}</span>
+                                <span
+                                  className={`forecast-card-value ${b.balance < 0 ? "stock-cell-bad" : "stock-cell-good"}`}
+                                >
+                                  {b.balance}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </section>
