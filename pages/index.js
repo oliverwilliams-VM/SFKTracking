@@ -506,11 +506,12 @@ export default function Home() {
   // Pooled UK vs EMEA, not per-country, same convention as Opening Stock.
   //
   // Balance = Opening Stock − Used. "Used" = hardware already committed:
-  // sites at Install Phase stage 6+ (contract/invoice sent onward),
-  // including everything already Live - one combined figure rather than
-  // two separate columns, since both represent hardware that's already
-  // spoken for. Kiosk splits into the current and legacy variant via the
-  // Kiosk Unit Type / Corp Partner fields (isLegacyKioskType).
+  // sites at Install Phase stage 6-10 (contract/invoice sent onward,
+  // bounded - not open-ended - to exactly 6 through 10), including
+  // everything already Live - one combined figure rather than two separate
+  // columns, since both represent hardware that's already spoken for.
+  // Kiosk splits into the current and legacy variant via the Kiosk Unit
+  // Type / Corp Partner fields (isLegacyKioskType).
   const swFundedLedger = useMemo(() => {
     if (!data || !stock?.hardwareTypes) return null;
 
@@ -531,9 +532,11 @@ export default function Home() {
       const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
       const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
       const stage = stageNumber(item.installPhase);
-      // Stage 6+ (contract/invoice sent onward) or already Live - hardware
-      // committed either way, so it counts as Used regardless of which.
-      const isUsed = live || (stage !== null && stage >= 6);
+      // Stage 6-10 (contract/invoice sent onward, bounded - not an
+      // open-ended "6 and above", same correctness fix as Table Forecast)
+      // or already Live - hardware committed either way, so it counts as
+      // Used regardless of which.
+      const isUsed = live || (stage !== null && stage >= 6 && stage <= 10);
       if (!isUsed) return;
 
       const kioskQty = item.kioskQty || 0;
@@ -582,7 +585,7 @@ export default function Home() {
       const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
       const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
       const stage = stageNumber(item.installPhase);
-      const isUsed = live || (stage !== null && stage >= 6);
+      const isUsed = live || (stage !== null && stage >= 6 && stage <= 10);
       return {
         name: item.name,
         country: item.country || "",
@@ -593,7 +596,7 @@ export default function Home() {
         kioskType,
         kioskQty: item.kioskQty || 0,
         kioskQtySource: item.kioskQtySource || "none",
-        classification: isUsed ? (live ? "Used (Live)" : "Used (Stage 6+)") : "Not yet (Stage <6)",
+        classification: isUsed ? (live ? "Used (Live)" : "Used (Stage 6-10)") : "Not yet (outside Stage 6-10)",
       };
     });
   }, [data]);
@@ -1025,7 +1028,7 @@ export default function Home() {
                     Download site-level detail (CSV)
                   </button>
                 </div>
-                <p className="stock-footnote">This is for sites at Stage 6 or above, including Live.</p>
+                <p className="stock-footnote">This is for sites at Stage 6-10, including Live.</p>
                 {stockError ? (
                   <p className="error-panel">{stockError}</p>
                 ) : !stock || !data ? (
