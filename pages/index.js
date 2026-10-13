@@ -574,11 +574,11 @@ export default function Home() {
     });
   }, [data]);
 
-  // Table Forecast — three headline numbers (Used/Live, Needed Stage 6+,
-  // Needed Stage 5 and below), each split UK/EMEA/Total and by scope
-  // (Funded / Whole Estate / Non-Funded, Non-Funded as the difference).
+  // Table Forecast — two headline numbers (Needed Stage 6+, Needed Stage 5
+  // and below), each split UK/EMEA/Total and by scope (Funded / Whole
+  // Estate / Non-Funded, Non-Funded as the difference). Live sites are out
+  // of scope entirely - their table need is already met, so irrelevant here.
   const TABLE_METRICS = [
-    { key: "live", label: "Used — Live Sites" },
     { key: "stage6Plus", label: "Needed — Stage 6+ (active pipeline)" },
     { key: "stage5Below", label: "Needed — Stage 5 and below" },
   ];
@@ -977,7 +977,7 @@ export default function Home() {
                             r.name,
                             r.country,
                             r.installPhase,
-                            r.metric === "live" ? "Used (Live)" : r.metric === "stage6Plus" ? "Needed (Stage 6+)" : "Needed (Stage 5 and below)",
+                            r.metric === "stage6Plus" ? "Needed (Stage 6+)" : "Needed (Stage 5 and below)",
                             r.funded ? "Yes" : "No",
                             r.tableType,
                           ]),
@@ -989,12 +989,12 @@ export default function Home() {
                   </button>
                 </div>
                 <p className="stock-footnote">
-                  Flat 1 table per site (no per-site quantity field exists on Monday). Funded = the
-                  SW Funded Stock Ledger population above. Whole Estate = every in-scope site
-                  (Interrupt, Disrupt, Small Format, Retrofit, Remodel/NRO), funded or not.
-                  Non-Funded is the difference — the FZE self-purchased Retrofit/Remodel sites, who
-                  buy their own tables. Table shape (Rectangle/Circular/Long Rectangle) is in the
-                  CSV download.
+                  Flat 1 table per site (no per-site quantity field exists on Monday). Live sites are
+                  out of scope — their need is already met. Funded = the SW Funded Stock Ledger
+                  population above. Whole Estate = every in-scope, not-yet-live site (Interrupt,
+                  Disrupt, Small Format, Retrofit, Remodel/NRO), funded or not. Non-Funded is the
+                  difference — the FZE self-purchased Retrofit/Remodel sites, who buy their own
+                  tables. Table shape (Rectangle/Circular/Long Rectangle) is in the CSV download.
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
@@ -1009,8 +1009,8 @@ export default function Home() {
                           <div className="forecast-card-row forecast-card-head">
                             <span></span>
                             <span>Funded</span>
-                            <span>Whole Estate</span>
-                            <span>Non-Funded</span>
+                            <span>Non Funded</span>
+                            <span>Total</span>
                           </div>
                           {metric.rows.map((r) => (
                             <div
@@ -1021,8 +1021,8 @@ export default function Home() {
                                 {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"}
                               </span>
                               <span className="forecast-card-value">{r.funded}</span>
-                              <span className="forecast-card-value">{r.wholeEstate}</span>
                               <span className="forecast-card-value">{r.nonFunded}</span>
+                              <span className="forecast-card-value">{r.wholeEstate}</span>
                             </div>
                           ))}
                         </div>
