@@ -556,6 +556,42 @@ body {
   color: var(--warn);
 }
 
+.bucket-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.bucket-tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.bucket-tab:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.bucket-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.bucket-tab-count {
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
 .stale-count {
   font-size: 0.82rem;
   font-weight: 500;

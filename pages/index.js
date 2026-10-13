@@ -79,6 +79,22 @@ function stageNumber(phase) {
   return match ? parseInt(match[1], 10) : null;
 }
 
+// Exclusive install-date buckets for the Table Order Check filter tabs - a
+// site with no date, an overdue date, or one past 6 weeks out all land in
+// "All Others" rather than a 4th numbered bucket.
+const INSTALL_BUCKETS = ["Install 2 Weeks Out", "Install 4 Weeks Out", "Install 6 Weeks Out", "All Others"];
+function installBucket(installDateStr) {
+  if (!installDateStr) return "All Others";
+  const d = new Date(installDateStr);
+  if (Number.isNaN(d.getTime())) return "All Others";
+  const diffDays = Math.floor((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (diffDays < 0) return "All Others";
+  if (diffDays <= 14) return "Install 2 Weeks Out";
+  if (diffDays <= 28) return "Install 4 Weeks Out";
+  if (diffDays <= 42) return "Install 6 Weeks Out";
+  return "All Others";
+}
+
 // Fixed per-site requirement for everything except the two Kiosk variants
 // and SFK Stand (all three pulled from kioskQty per site - a Stand is 1 per
 // kiosk, same count as the kiosk itself, not a flat 1 per store). ADA Unit
@@ -617,10 +633,22 @@ export default function Home() {
   // the actionable callout, sorted to the top.
   const stage8To10Summary = useMemo(() => {
     if (!tableForecast?.stage8To10Rows) return null;
-    const rows = [...tableForecast.stage8To10Rows].sort((a, b) => Number(a.tableOrdered) - Number(b.tableOrdered));
+    const rows = [...tableForecast.stage8To10Rows]
+      .map((r) => ({ ...r, installBucket: installBucket(r.installDate) }))
+      .sort((a, b) => Number(a.tableOrdered) - Number(b.tableOrdered));
     const notOrdered = rows.filter((r) => !r.tableOrdered);
-    return { rows, notOrdered, orderedCount: rows.length - notOrdered.length };
+    const bucketCounts = Object.fromEntries(
+      INSTALL_BUCKETS.map((b) => [b, notOrdered.filter((r) => r.installBucket === b).length])
+    );
+    return { rows, notOrdered, orderedCount: rows.length - notOrdered.length, bucketCounts };
   }, [tableForecast]);
+  const [notOrderedBucketFilter, setNotOrderedBucketFilter] = useState(null);
+  const filteredNotOrdered = useMemo(() => {
+    if (!stage8To10Summary) return [];
+    return notOrderedBucketFilter
+      ? stage8To10Summary.notOrdered.filter((r) => r.installBucket === notOrderedBucketFilter)
+      : stage8To10Summary.notOrdered;
+  }, [stage8To10Summary, notOrderedBucketFilter]);
 
   const searchResults = useMemo(() => {
     if (!data || !search.trim()) return [];
@@ -1161,22 +1189,48 @@ export default function Home() {
                   {stage8To10Summary.notOrdered.length === 0 ? (
                     <p className="loading-panel">All Stage 8/9/10 sites have ordered their table.</p>
                   ) : (
-                    <div className="stale-list">
-                      {stage8To10Summary.notOrdered.slice(0, 12).map((r) => (
-                        <div className="stale-row" key={r.name}>
-                          <span className="stale-name">{r.name}</span>
-                          <span className="stale-meta">
-                            {flagFor(r.country)} {r.country || "—"} · Stage {r.stage}
-                          </span>
-                          <span className="stale-days stale-days-bad">{r.tableOrderedText}</span>
+                    <>
+                      <div className="bucket-tabs">
+                        <button
+                          type="button"
+                          className={`bucket-tab${notOrderedBucketFilter === null ? " active" : ""}`}
+                          onClick={() => setNotOrderedBucketFilter(null)}
+                        >
+                          All <span className="bucket-tab-count">{stage8To10Summary.notOrdered.length}</span>
+                        </button>
+                        {INSTALL_BUCKETS.map((b) => (
+                          <button
+                            type="button"
+                            key={b}
+                            className={`bucket-tab${notOrderedBucketFilter === b ? " active" : ""}`}
+                            onClick={() => setNotOrderedBucketFilter(b)}
+                          >
+                            {b} <span className="bucket-tab-count">{stage8To10Summary.bucketCounts[b]}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {filteredNotOrdered.length === 0 ? (
+                        <p className="loading-panel">No sites in this group.</p>
+                      ) : (
+                        <div className="stale-list">
+                          {filteredNotOrdered.slice(0, 12).map((r) => (
+                            <div className="stale-row" key={r.name}>
+                              <span className="stale-name">{r.name}</span>
+                              <span className="stale-meta">
+                                {flagFor(r.country)} {r.country || "—"} · Stage {r.stage} ·{" "}
+                                {r.installDate ? `Install ${r.installDate}` : "No install date"}
+                              </span>
+                              <span className="stale-days stale-days-bad">{r.tableOrderedText}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {stage8To10Summary.notOrdered.length > 12 && (
-                    <p className="stale-more">
-                      + {stage8To10Summary.notOrdered.length - 12} more — download the CSV for the full list
-                    </p>
+                      )}
+                      {filteredNotOrdered.length > 12 && (
+                        <p className="stale-more">
+                          + {filteredNotOrdered.length - 12} more — download the CSV for the full list
+                        </p>
+                      )}
+                    </>
                   )}
                 </section>
               )}
