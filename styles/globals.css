@@ -1085,6 +1085,25 @@ body {
   font-size: 1.6rem;
 }
 
+.forecast-card-subhead {
+  margin: 0.9rem 0 0.6rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.shape-breakdown-row {
+  grid-template-columns: 4.5rem repeat(4, 1fr);
+}
+
+.shape-breakdown-row .forecast-card-value {
+  font-size: 1rem;
+}
+
 @media (max-width: 1100px) {
   .ledger-grid {
     grid-template-columns: repeat(2, 1fr);

@@ -625,7 +625,20 @@ export default function Home() {
         wholeEstate: countryRows.reduce((s, r) => s + r.wholeEstate, 0),
         nonFunded: countryRows.reduce((s, r) => s + r.nonFunded, 0),
       };
-      return { key, label, rows: [...countryRows, total] };
+
+      // Table shape breakdown for stock forecasting - Whole Estate (the
+      // actual physical need, funded or not) by UK/EMEA/Total.
+      const tableTypes = tableForecast.tableTypes || [];
+      const shapeRows = ["UK", "EMEA"].map((country) => {
+        const byType = tableForecast.wholeEstate[country][key]?.byType || {};
+        return { country, counts: tableTypes.map((t) => byType[t] || 0) };
+      });
+      const shapeTotal = {
+        country: "Total",
+        counts: tableTypes.map((_, i) => shapeRows.reduce((s, r) => s + r.counts[i], 0)),
+      };
+
+      return { key, label, rows: [...countryRows, total], tableTypes, shapeRows: [...shapeRows, shapeTotal] };
     });
   }, [tableForecast]);
 
@@ -1051,7 +1064,9 @@ export default function Home() {
                   population above. Whole Estate = every in-scope, not-yet-live site (Interrupt,
                   Disrupt, Small Format, Retrofit, Remodel/NRO), funded or not. Non-Funded is the
                   difference — the FZE self-purchased Retrofit/Remodel sites, who buy their own
-                  tables. Table shape (Rectangle/Circular/Long Rectangle) is in the CSV download.
+                  tables. Table shape breakdown below each card is Whole Estate (the full physical
+                  need, for stock forecasting) - per-site detail with Funded/Non-Funded split is in
+                  the CSV download.
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
@@ -1080,6 +1095,30 @@ export default function Home() {
                               <span className="forecast-card-value">{r.funded}</span>
                               <span className="forecast-card-value">{r.nonFunded}</span>
                               <span className="forecast-card-value">{r.wholeEstate}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="forecast-card-subhead">By Table Shape (Whole Estate)</div>
+                        <div className="forecast-card-table">
+                          <div className="forecast-card-row forecast-card-head shape-breakdown-row">
+                            <span></span>
+                            {metric.tableTypes.map((t) => (
+                              <span key={t}>{t}</span>
+                            ))}
+                          </div>
+                          {metric.shapeRows.map((r) => (
+                            <div
+                              className={`forecast-card-row shape-breakdown-row${r.country === "Total" ? " total" : ""}`}
+                              key={r.country}
+                            >
+                              <span className="forecast-card-country">
+                                {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"}
+                              </span>
+                              {r.counts.map((c, i) => (
+                                <span className="forecast-card-value" key={metric.tableTypes[i]}>
+                                  {c}
+                                </span>
+                              ))}
                             </div>
                           ))}
                         </div>
@@ -1170,7 +1209,7 @@ export default function Home() {
                         downloadCsv(
                           `table-order-check-stage-8-10-${new Date().toISOString().slice(0, 10)}.csv`,
                           [
-                            ["Site", "Country", "Stage", "Install Phase (as read)", "Funded", "H&K Tables Ordered"],
+                            ["Site", "Country", "Stage", "Install Phase (as read)", "Funded", "Table Ordered Status", "Source"],
                             ...stage8To10Summary.rows.map((r) => [
                               r.name,
                               r.country,
@@ -1178,6 +1217,7 @@ export default function Home() {
                               r.installPhase,
                               r.funded ? "Yes" : "No",
                               r.tableOrderedText,
+                              r.tableOrderedSource,
                             ]),
                           ]
                         )
@@ -1186,6 +1226,12 @@ export default function Home() {
                       Download CSV
                     </button>
                   </div>
+                  <p className="stock-footnote">
+                    Funded sites: H&K Tables Ordered. Non-Funded (FZE) sites: the FZE Readiness form
+                    (UK/IE and Germany only - NL falls back to H&K Tables Ordered, which H&K doesn't
+                    populate for self-purchase sites, so NL non-funded sites with no response show as
+                    not ordered until a Readiness match is added for them).
+                  </p>
                   {stage8To10Summary.notOrdered.length === 0 ? (
                     <p className="loading-panel">All Stage 8/9/10 sites have ordered their table.</p>
                   ) : (
