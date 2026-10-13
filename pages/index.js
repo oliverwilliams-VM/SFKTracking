@@ -465,35 +465,6 @@ export default function Home() {
       .sort((a, b) => b.daysSince - a.daysSince);
   }, [data]);
 
-  // Stock on hand (per country) vs required (everything not yet live) —
-  // one row per hardware type, one column per country plus a Total.
-  const stockTable = useMemo(() => {
-    if (!stock) return null;
-    const onHandByCountryType = {};
-    (stock.onHand?.rows || []).forEach((row) => {
-      const country = row.country;
-      if (!onHandByCountryType[country]) onHandByCountryType[country] = {};
-      // If the stock board somehow has more than one row for the same
-      // country/type, add them rather than letting the later one silently
-      // win — that's a real count, not a data-entry mistake to hide.
-      onHandByCountryType[country][row.hardwareType] =
-        (onHandByCountryType[country][row.hardwareType] || 0) + row.qtyInStock;
-    });
-
-    const required = stock.required?.required || {};
-    const rows = stock.hardwareTypes.map((type) => {
-      const byCountry = stock.countries.map((country) => {
-        const onHand = onHandByCountryType[country]?.[type] ?? 0;
-        const req = required[country]?.[type] ?? 0;
-        return { country, onHand, required: req, shortfall: onHand - req };
-      });
-      const totalOnHand = byCountry.reduce((s, c) => s + c.onHand, 0);
-      const totalRequired = required.Total?.[type] ?? 0;
-      return { type, byCountry, totalOnHand, totalRequired, totalShortfall: totalOnHand - totalRequired };
-    });
-
-    return { rows, siteCount: stock.required?.siteCount || {} };
-  }, [stock]);
 
   // SW Funded Stock Ledger — a separate, narrower view for the bulk
   // hardware Subway itself bought (data.items is already filtered to that
@@ -552,6 +523,33 @@ export default function Home() {
 
     return { rows };
   }, [data, stock]);
+
+  // Per-site detail behind the ledger above - exported as a CSV rather than
+  // shown on screen (it's one row per SFK site, too much for the page), so
+  // Oli can check the raw inputs (install phase as read, Corp Partner,
+  // kiosk qty, which bucket it landed in) against what he knows on the
+  // ground, rather than trusting the rolled-up totals blind.
+  const ledgerDetailRows = useMemo(() => {
+    if (!data) return [];
+    return data.items.map((item) => {
+      const countryNorm = (item.country || "").trim().toLowerCase();
+      const bucket = countryNorm === "uk" || countryNorm.includes("united kingdom") ? "UK" : "EMEA";
+      const kioskType = isLegacyKioskPartner(item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
+      const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
+      const stage = stageNumber(item.installPhase);
+      const accountedFor = !live && stage !== null && stage >= 6;
+      return {
+        name: item.name,
+        country: item.country || "",
+        bucket,
+        installPhase: item.installPhase || "",
+        corpPartner: item.corpPartner || "",
+        kioskType,
+        kioskQty: item.kioskQty || 0,
+        classification: live ? "Used (Live)" : accountedFor ? "Accounted For (stage 6+)" : "Neither",
+      };
+    });
+  }, [data]);
 
   const searchResults = useMemo(() => {
     if (!data || !search.trim()) return [];
@@ -827,81 +825,55 @@ export default function Home() {
                 ))}
               </section>
 
-              <section className="panel stock-panel">
-                <div className="stock-header">
-                  <h2>Hardware Stock</h2>
-                </div>
-                {stockError ? (
-                  <p className="error-panel">{stockError}</p>
-                ) : !stock ? (
-                  <p className="loading-panel">Loading stock…</p>
-                ) : (
-                  <>
-                    {stock.onHand?.error && (
-                      <p className="warn-panel">Couldn't load stock on hand: {stock.onHand.error}</p>
-                    )}
-                    {stock.required?.error && (
-                      <p className="error-panel">Couldn't compute required stock: {stock.required.error}</p>
-                    )}
-                    <div className="stock-table-wrap">
-                      <table className="stock-table">
-                        <thead>
-                          <tr>
-                            <th>Hardware</th>
-                            {stock.countries.map((c) => (
-                              <th key={c}>
-                                {flagFor(c)} {c}
-                              </th>
-                            ))}
-                            <th>Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {stockTable?.rows.map((row) => (
-                            <tr key={row.type}>
-                              <td className="stock-type-cell">{row.type}</td>
-                              {row.byCountry.map((c) => (
-                                <td
-                                  key={c.country}
-                                  className={c.shortfall < 0 ? "stock-cell-bad" : "stock-cell-good"}
-                                >
-                                  {c.onHand} / {c.required}
-                                </td>
-                              ))}
-                              <td className={row.totalShortfall < 0 ? "stock-cell-bad" : "stock-cell-good"}>
-                                <strong>
-                                  {row.totalOnHand} / {row.totalRequired}
-                                </strong>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="stock-footnote">
-                      Each cell reads "on hand / required". Required = every site not yet live across
-                      Interrupt, Disrupt, Small Format, Retrofit and Remodel/NRO —{" "}
-                      {stockTable?.siteCount?.Total || 0} site{stockTable?.siteCount?.Total === 1 ? "" : "s"}{" "}
-                      currently. Red means a shortfall.
-                    </p>
-                  </>
-                )}
-              </section>
-
               <section className="panel ledger-panel">
                 <div className="stock-header">
                   <h2>SW Funded Stock Ledger</h2>
+                  <button
+                    type="button"
+                    className="stale-download"
+                    onClick={() =>
+                      downloadCsv(
+                        `sw-funded-ledger-detail-${new Date().toISOString().slice(0, 10)}.csv`,
+                        [
+                          [
+                            "Site",
+                            "Country",
+                            "Bucket",
+                            "Install Phase (as read)",
+                            "Corp Partner",
+                            "Kiosk Type",
+                            "Kiosk Qty",
+                            "Classification",
+                          ],
+                          ...ledgerDetailRows.map((r) => [
+                            r.name,
+                            r.country,
+                            r.bucket,
+                            r.installPhase,
+                            r.corpPartner,
+                            r.kioskType,
+                            r.kioskQty,
+                            r.classification,
+                          ]),
+                        ]
+                      )
+                    }
+                  >
+                    Download site-level detail (CSV)
+                  </button>
                 </div>
                 <p className="stock-footnote">
                   Scoped to the bulk hardware Subway itself purchased (SFK Format = Part Subway
                   Funded / MFG Funded Site) — Retrofit and Remodel sites buy their own, site by
-                  site, so they're excluded here even though they're counted in the panel above.
-                  Pooled UK vs EMEA, not per-country, same as how it was bought. Balance = Opening
-                  Stock − Used (already Live) − Accounted For (Install Phase stage 6+, not yet
-                  live). Kiosk splits by variant: EG on the Move and MFG, the early adopters, ran
-                  the older 22" Flyte kiosk; everyone else is on the current ELO5 - Kiosk.
+                  site, so they're out of scope here. Pooled UK vs EMEA, not per-country, same
+                  as how it was bought. Balance = Opening Stock − Used (already Live) − Accounted
+                  For (Install Phase stage 6+, not yet live). Kiosk splits by variant: EG on the
+                  Move and MFG, the early adopters, ran the older 22" Flyte kiosk; everyone else
+                  is on the current ELO5 - Kiosk.
                 </p>
-                {!stock || !data ? (
+                {stockError ? (
+                  <p className="error-panel">{stockError}</p>
+                ) : !stock || !data ? (
                   <p className="loading-panel">Loading…</p>
                 ) : (
                   <div className="stock-table-wrap">
