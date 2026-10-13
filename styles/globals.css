@@ -594,6 +594,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.stale-count-bad {
+  color: var(--bad);
+}
+
+.stale-days-bad {
+  color: var(--bad);
+}
+
 .stale-more {
   margin: 0.6rem 0 0;
   font-size: 0.8rem;
@@ -1026,6 +1034,19 @@ body {
 
 .ledger-grid {
   grid-template-columns: repeat(4, 1fr);
+}
+
+.installing-soon-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  max-width: 560px;
+}
+
+.installing-soon-row {
+  grid-template-columns: 4.5rem 1fr;
+}
+
+.installing-soon-row .forecast-card-value {
+  font-size: 1.6rem;
 }
 
 @media (max-width: 1100px) {

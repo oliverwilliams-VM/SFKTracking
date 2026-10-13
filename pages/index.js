@@ -596,7 +596,12 @@ export default function Home() {
       const countryRows = ["UK", "EMEA"].map((country) => {
         const funded = tableForecast.funded[country][key]?.sites || 0;
         const wholeEstate = tableForecast.wholeEstate[country][key]?.sites || 0;
-        return { country, funded, wholeEstate, nonFunded: wholeEstate - funded };
+        // Non-Funded's Stage 6+ figure is stricter than a plain diff - only
+        // non-funded sites at stage 6+ with an H&K Shipping Date populated.
+        // Stage 5- keeps the plain Whole Estate minus Funded diff.
+        const nonFunded =
+          key === "stage6Plus" ? tableForecast.nonFundedShippingReady?.[country] || 0 : wholeEstate - funded;
+        return { country, funded, wholeEstate, nonFunded };
       });
       const total = {
         country: "Total",
@@ -606,6 +611,15 @@ export default function Home() {
       };
       return { key, label, rows: [...countryRows, total] };
     });
+  }, [tableForecast]);
+
+  // Stage 8/9/10 table-order check - the ones that haven't ordered yet are
+  // the actionable callout, sorted to the top.
+  const stage8To10Summary = useMemo(() => {
+    if (!tableForecast?.stage8To10Rows) return null;
+    const rows = [...tableForecast.stage8To10Rows].sort((a, b) => Number(a.tableOrdered) - Number(b.tableOrdered));
+    const notOrdered = rows.filter((r) => !r.tableOrdered);
+    return { rows, notOrdered, orderedCount: rows.length - notOrdered.length };
   }, [tableForecast]);
 
   const searchResults = useMemo(() => {
@@ -1046,6 +1060,126 @@ export default function Home() {
                   </div>
                 )}
               </section>
+
+              <section className="panel ledger-panel">
+                <div className="stock-header">
+                  <h2>Installing Soon</h2>
+                  <button
+                    type="button"
+                    className="stale-download"
+                    onClick={() =>
+                      downloadCsv(
+                        `installing-soon-${new Date().toISOString().slice(0, 10)}.csv`,
+                        [
+                          ["Site", "Country", "Install Date", "Install Phase (as read)"],
+                          ...(tableForecast?.installingSoonRows || []).map((r) => [
+                            r.name,
+                            r.country,
+                            r.installDate,
+                            r.installPhase,
+                          ]),
+                        ]
+                      )
+                    }
+                  >
+                    Download site-level detail (CSV)
+                  </button>
+                </div>
+                <p className="stock-footnote">
+                  From the confirmed Install Date (pulled from the country Install boards). Next 4
+                  weeks includes the next 2 - both counted from today, not yet-live sites only.
+                </p>
+                {tableForecastError ? (
+                  <p className="error-panel">{tableForecastError}</p>
+                ) : !tableForecast ? (
+                  <p className="loading-panel">Loading…</p>
+                ) : (
+                  <div className="forecast-grid installing-soon-grid">
+                    {[
+                      { key: "next2Weeks", label: "Next 2 Weeks" },
+                      { key: "next4Weeks", label: "Next 4 Weeks" },
+                    ].map(({ key, label }) => (
+                      <div className="forecast-card" key={key}>
+                        <h3>{label}</h3>
+                        <div className="forecast-card-table">
+                          <div className="forecast-card-row forecast-card-head installing-soon-row">
+                            <span></span>
+                            <span>Sites</span>
+                          </div>
+                          {["UK", "EMEA", "Total"].map((country) => (
+                            <div
+                              className={`forecast-card-row installing-soon-row${country === "Total" ? " total" : ""}`}
+                              key={country}
+                            >
+                              <span className="forecast-card-country">
+                                {country === "UK" ? "🇬🇧 UK" : country === "EMEA" ? "🌍 EMEA" : "Total"}
+                              </span>
+                              <span className="forecast-card-value">
+                                {tableForecast.installingSoon[key][country]}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {stage8To10Summary && stage8To10Summary.rows.length > 0 && (
+                <section className="panel stale-panel">
+                  <div className="stale-header">
+                    <h2>
+                      Table Order Check — Stage 8/9/10{" "}
+                      <span className={`stale-count${stage8To10Summary.notOrdered.length > 0 ? " stale-count-bad" : ""}`}>
+                        {stage8To10Summary.notOrdered.length} of {stage8To10Summary.rows.length} haven't ordered
+                      </span>
+                    </h2>
+                    <button
+                      type="button"
+                      className="stale-download"
+                      onClick={() =>
+                        downloadCsv(
+                          `table-order-check-stage-8-10-${new Date().toISOString().slice(0, 10)}.csv`,
+                          [
+                            ["Site", "Country", "Stage", "Install Phase (as read)", "Funded", "H&K Tables Ordered"],
+                            ...stage8To10Summary.rows.map((r) => [
+                              r.name,
+                              r.country,
+                              r.stage,
+                              r.installPhase,
+                              r.funded ? "Yes" : "No",
+                              r.tableOrderedText,
+                            ]),
+                          ]
+                        )
+                      }
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                  {stage8To10Summary.notOrdered.length === 0 ? (
+                    <p className="loading-panel">All Stage 8/9/10 sites have ordered their table.</p>
+                  ) : (
+                    <div className="stale-list">
+                      {stage8To10Summary.notOrdered.slice(0, 12).map((r) => (
+                        <div className="stale-row" key={r.name}>
+                          <span className="stale-name">{r.name}</span>
+                          <span className="stale-meta">
+                            {flagFor(r.country)} {r.country || "—"} · Stage {r.stage}
+                          </span>
+                          <span className="stale-days stale-days-bad">{r.tableOrderedText}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {stage8To10Summary.notOrdered.length > 12 && (
+                    <p className="stale-more">
+                      + {stage8To10Summary.notOrdered.length - 12} more — download the CSV for the full list
+                    </p>
+                  )}
+                </section>
+              )}
 
               {staleItems.length > 0 && (
                 <section className="panel stale-panel">
