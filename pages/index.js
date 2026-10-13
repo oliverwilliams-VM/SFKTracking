@@ -612,34 +612,44 @@ export default function Home() {
   const tableForecastSummary = useMemo(() => {
     if (!tableForecast) return null;
     return TABLE_METRICS.map(({ key, label }) => {
+      const isStage6Plus = key === "stage6Plus";
       const countryRows = ["UK", "EMEA"].map((country) => {
         const funded = tableForecast.funded[country][key]?.sites || 0;
         const wholeEstate = tableForecast.wholeEstate[country][key]?.sites || 0;
-        // Non-Funded's Stage 6+ figure is stricter than a plain diff - only
+        // Stage 6+'s Non-Funded is stricter than a plain diff - only
         // non-funded sites at stage 6+ with an H&K Shipping Date populated.
-        // Stage 5- keeps the plain Whole Estate minus Funded diff.
-        const nonFunded =
-          key === "stage6Plus" ? tableForecast.nonFundedShippingReady?.[country] || 0 : wholeEstate - funded;
-        return { country, funded, wholeEstate, nonFunded };
+        // Oli confirmed this card shouldn't report Whole Estate at all -
+        // its Total is Funded + this Non-Funded figure, nothing wider.
+        // Stage 5- keeps the plain Whole Estate minus Funded diff, so its
+        // Total is Whole Estate (and still equals Funded + Non-Funded).
+        const nonFunded = isStage6Plus ? tableForecast.nonFundedShippingReady?.[country] || 0 : wholeEstate - funded;
+        const total = isStage6Plus ? funded + nonFunded : wholeEstate;
+        return { country, funded, nonFunded, total };
       });
       const total = {
         country: "Total",
         funded: countryRows.reduce((s, r) => s + r.funded, 0),
-        wholeEstate: countryRows.reduce((s, r) => s + r.wholeEstate, 0),
         nonFunded: countryRows.reduce((s, r) => s + r.nonFunded, 0),
+        total: countryRows.reduce((s, r) => s + r.total, 0),
       };
 
       // Table shape breakdown for stock forecasting - Funded vs Non-Funded,
-      // by UK/EMEA/Total. Non-Funded by shape is Whole Estate minus Funded
-      // (same diff convention as the Stage 5- card's headline Non-Funded -
-      // the stricter shipping-date rule only applies to the headline total,
-      // not tracked per shape).
+      // by UK/EMEA/Total. Stage 6+'s Non-Funded by shape uses the same
+      // shipping-date-ready population as its headline figure, so the
+      // breakdown always sums back to the headline number. Stage 5- keeps
+      // the plain Whole Estate minus Funded diff, matching its headline.
       const tableTypes = tableForecast.tableTypes || [];
       const shapeCountryRows = ["UK", "EMEA"].flatMap((country) => {
-        const wholeByType = tableForecast.wholeEstate[country][key]?.byType || {};
         const fundedByType = tableForecast.funded[country][key]?.byType || {};
         const fundedCounts = tableTypes.map((t) => fundedByType[t] || 0);
-        const nonFundedCounts = tableTypes.map((t) => (wholeByType[t] || 0) - (fundedByType[t] || 0));
+        let nonFundedCounts;
+        if (isStage6Plus) {
+          const readyByType = tableForecast.nonFundedShippingReadyByType?.[country] || {};
+          nonFundedCounts = tableTypes.map((t) => readyByType[t] || 0);
+        } else {
+          const wholeByType = tableForecast.wholeEstate[country][key]?.byType || {};
+          nonFundedCounts = tableTypes.map((t) => (wholeByType[t] || 0) - (fundedByType[t] || 0));
+        }
         return [
           { country, scope: "Funded", counts: fundedCounts },
           { country, scope: "Non-Funded", counts: nonFundedCounts },
@@ -1143,7 +1153,7 @@ export default function Home() {
                               </span>
                               <span className="forecast-card-value">{r.funded}</span>
                               <span className="forecast-card-value">{r.nonFunded}</span>
-                              <span className="forecast-card-value">{r.wholeEstate}</span>
+                              <span className="forecast-card-value">{r.total}</span>
                             </div>
                           ))}
                         </div>
