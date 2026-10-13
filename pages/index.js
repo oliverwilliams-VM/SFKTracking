@@ -358,6 +358,13 @@ export default function Home() {
   const [tableForecast, setTableForecast] = useState(null);
   const [tableForecastError, setTableForecastError] = useState(null);
 
+  // Four independent panels, four independent fetches - each used to only
+  // run once on mount. The Refresh button and auto-refresh timer only ever
+  // called `load` (board-data), so the Stock Ledger, Table Forecast (and
+  // everything under it - shape breakdowns, Table Order Check, Installing
+  // Soon) and the history trend chips silently went stale after the first
+  // load, even though the button looked like it refreshed everything.
+  // loadAll below is what Refresh and auto-refresh now actually call.
   const load = () => {
     setLoading(true);
     setError(null);
@@ -381,12 +388,15 @@ export default function Home() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    load();
+  const loadHistory = () => {
     fetch("/api/history")
       .then((r) => r.json())
       .then(setHistory)
       .catch(() => setHistory(null));
+  };
+
+  const loadStock = () => {
+    setStockError(null);
     fetch("/api/stock-data")
       .then(async (r) => {
         const json = await r.json();
@@ -395,6 +405,10 @@ export default function Home() {
       })
       .then(setStock)
       .catch((e) => setStockError(e.message));
+  };
+
+  const loadTableForecast = () => {
+    setTableForecastError(null);
     fetch("/api/table-forecast")
       .then(async (r) => {
         const json = await r.json();
@@ -403,6 +417,18 @@ export default function Home() {
       })
       .then(setTableForecast)
       .catch((e) => setTableForecastError(e.message));
+  };
+
+  const loadAll = () => {
+    load();
+    loadHistory();
+    loadStock();
+    loadTableForecast();
+  };
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-refresh: remember the toggle across visits, and only run the timer
@@ -415,7 +441,7 @@ export default function Home() {
   useEffect(() => {
     window.localStorage.setItem(AUTO_REFRESH_KEY, autoRefresh ? "1" : "0");
     if (!autoRefresh) return;
-    const id = setInterval(load, AUTO_REFRESH_INTERVAL_MS);
+    const id = setInterval(loadAll, AUTO_REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh]);
@@ -854,7 +880,7 @@ export default function Home() {
               <span className="auto-refresh-dot" /> Auto-refresh
             </button>
 
-            <button className="refresh" onClick={load} disabled={loading}>
+            <button className="refresh" onClick={loadAll} disabled={loading}>
               {loading ? <BouncingDots /> : "Refresh"}
             </button>
           </div>

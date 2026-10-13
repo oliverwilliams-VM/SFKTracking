@@ -1112,6 +1112,7 @@ button.forecast-card-value {
   background: transparent;
   border: none;
   font-family: inherit;
+  color: inherit;
   padding: 0.1rem 0.2rem;
   margin: 0;
 }
