@@ -1102,13 +1102,26 @@ export default function Home() {
                       downloadCsv(
                         `table-forecast-detail-${new Date().toISOString().slice(0, 10)}.csv`,
                         [
-                          ["Site", "Country", "Install Phase (as read)", "Bucket", "Funded", "Table Shape"],
+                          [
+                            "Site",
+                            "Country",
+                            "Install Phase (as read)",
+                            "Bucket",
+                            "Funded",
+                            "In Scope Via",
+                            "Layout Type",
+                            "Store Opening Type",
+                            "Table Shape",
+                          ],
                           ...(tableForecast?.detailRows || []).map((r) => [
                             r.name,
                             r.country,
                             r.installPhase,
                             r.metric === "stage6Plus" ? "Needed (Stage 6+)" : "Needed (Stage 5 and below)",
                             r.funded ? "Yes" : "No",
+                            r.inScopeReason,
+                            r.layoutType,
+                            r.storeOpeningType,
                             r.tableType,
                           ]),
                         ]
