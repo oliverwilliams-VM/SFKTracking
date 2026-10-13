@@ -871,3 +871,60 @@ body {
   font-size: 0.85rem;
   color: var(--ink-soft);
 }
+
+.stock-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.stock-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.stock-table-wrap {
+  overflow-x: auto;
+}
+
+.stock-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.stock-table th,
+.stock-table td {
+  padding: 0.55rem 0.8rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.stock-table th {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.stock-type-cell {
+  text-align: left !important;
+  font-weight: 600;
+}
+
+.stock-cell-good {
+  color: var(--good);
+}
+
+.stock-cell-bad {
+  color: var(--bad);
+  background: var(--warn-bg);
+}
+
+.stock-footnote {
+  margin: 0.9rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}

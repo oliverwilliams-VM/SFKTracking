@@ -302,6 +302,8 @@ export default function Home() {
   const [history, setHistory] = useState(null);
   const [search, setSearch] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [stock, setStock] = useState(null);
+  const [stockError, setStockError] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -332,6 +334,14 @@ export default function Home() {
       .then((r) => r.json())
       .then(setHistory)
       .catch(() => setHistory(null));
+    fetch("/api/stock-data")
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error || "Failed to load stock data");
+        return json;
+      })
+      .then(setStock)
+      .catch((e) => setStockError(e.message));
   }, []);
 
   // Auto-refresh: remember the toggle across visits, and only run the timer
@@ -425,6 +435,36 @@ export default function Home() {
       .map((item) => ({ ...item, daysSince: daysSince(item.updatedAt) }))
       .sort((a, b) => b.daysSince - a.daysSince);
   }, [data]);
+
+  // Stock on hand (per country) vs required (everything not yet live) —
+  // one row per hardware type, one column per country plus a Total.
+  const stockTable = useMemo(() => {
+    if (!stock) return null;
+    const onHandByCountryType = {};
+    (stock.onHand?.rows || []).forEach((row) => {
+      const country = row.country;
+      if (!onHandByCountryType[country]) onHandByCountryType[country] = {};
+      // If the stock board somehow has more than one row for the same
+      // country/type, add them rather than letting the later one silently
+      // win — that's a real count, not a data-entry mistake to hide.
+      onHandByCountryType[country][row.hardwareType] =
+        (onHandByCountryType[country][row.hardwareType] || 0) + row.qtyInStock;
+    });
+
+    const required = stock.required?.required || {};
+    const rows = stock.hardwareTypes.map((type) => {
+      const byCountry = stock.countries.map((country) => {
+        const onHand = onHandByCountryType[country]?.[type] ?? 0;
+        const req = required[country]?.[type] ?? 0;
+        return { country, onHand, required: req, shortfall: onHand - req };
+      });
+      const totalOnHand = byCountry.reduce((s, c) => s + c.onHand, 0);
+      const totalRequired = required.Total?.[type] ?? 0;
+      return { type, byCountry, totalOnHand, totalRequired, totalShortfall: totalOnHand - totalRequired };
+    });
+
+    return { rows, siteCount: stock.required?.siteCount || {} };
+  }, [stock]);
 
   const searchResults = useMemo(() => {
     if (!data || !search.trim()) return [];
@@ -698,6 +738,74 @@ export default function Home() {
                     )}
                   </div>
                 ))}
+              </section>
+
+              <section className="panel stock-panel">
+                <div className="stock-header">
+                  <h2>Hardware Stock</h2>
+                </div>
+                {stockError ? (
+                  <p className="error-panel">{stockError}</p>
+                ) : !stock ? (
+                  <p className="loading-panel">Loading stock…</p>
+                ) : (
+                  <>
+                    {stock.onHand?.configured === false && (
+                      <p className="warn-panel">
+                        Stock board isn't set up yet. Create it on Monday (Country, Hardware Type,
+                        Qty In Stock, Last Updated), set <code>MONDAY_STOCK_BOARD_ID</code> in Vercel,
+                        and on-hand counts will appear here. The Required column below is already live.
+                      </p>
+                    )}
+                    {stock.onHand?.error && (
+                      <p className="warn-panel">Couldn't load stock on hand: {stock.onHand.error}</p>
+                    )}
+                    {stock.required?.error && (
+                      <p className="error-panel">Couldn't compute required stock: {stock.required.error}</p>
+                    )}
+                    <div className="stock-table-wrap">
+                      <table className="stock-table">
+                        <thead>
+                          <tr>
+                            <th>Hardware</th>
+                            {stock.countries.map((c) => (
+                              <th key={c}>
+                                {flagFor(c)} {c}
+                              </th>
+                            ))}
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stockTable?.rows.map((row) => (
+                            <tr key={row.type}>
+                              <td className="stock-type-cell">{row.type}</td>
+                              {row.byCountry.map((c) => (
+                                <td
+                                  key={c.country}
+                                  className={c.shortfall < 0 ? "stock-cell-bad" : "stock-cell-good"}
+                                >
+                                  {c.onHand} / {c.required}
+                                </td>
+                              ))}
+                              <td className={row.totalShortfall < 0 ? "stock-cell-bad" : "stock-cell-good"}>
+                                <strong>
+                                  {row.totalOnHand} / {row.totalRequired}
+                                </strong>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="stock-footnote">
+                      Each cell reads "on hand / required". Required = every site not yet live across
+                      Interrupt, Disrupt, Small Format, Retrofit and Remodel/NRO —{" "}
+                      {stockTable?.siteCount?.Total || 0} site{stockTable?.siteCount?.Total === 1 ? "" : "s"}{" "}
+                      currently. Red means a shortfall.
+                    </p>
+                  </>
+                )}
               </section>
 
               {staleItems.length > 0 && (
