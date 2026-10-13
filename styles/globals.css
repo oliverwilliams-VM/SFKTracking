@@ -1025,7 +1025,19 @@ body {
 }
 
 .ledger-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .ledger-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .ledger-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ledger-card {
