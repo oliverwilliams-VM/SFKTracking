@@ -7,9 +7,15 @@
 import { Redis } from "@upstash/redis";
 
 const SNAPSHOTS_KEY = "sfk:snapshots";
+// "key" is a stable identifier the frontend reads by (label text can change
+// without breaking it). "week" also gets a tighter absolute tolerance (see
+// below) rather than the default 40%-of-target one - 40% of 7 days is only
+// 2.8 days either way, barely different, but being explicit here means it
+// won't quietly get looser if the days value ever changes.
 const TARGETS_DAYS = [
-  { label: "1 mo ago", days: 30 },
-  { label: "3 mo ago", days: 90 },
+  { key: "week", label: "1 wk ago", days: 7, toleranceMs: 3 * 24 * 60 * 60 * 1000 },
+  { key: "month", label: "1 mo ago", days: 30 },
+  { key: "quarter", label: "3 mo ago", days: 90 },
 ];
 
 function getRedis() {
@@ -21,7 +27,7 @@ function getRedis() {
 
 // Finds the snapshot whose date is closest to (now - days), preferring the
 // nearest older one so "1 month ago" doesn't quietly become "3 weeks ago".
-function closestSnapshot(snapshots, days) {
+function closestSnapshot(snapshots, days, toleranceMs) {
   const targetTime = Date.now() - days * 24 * 60 * 60 * 1000;
   let best = null;
   let bestDiff = Infinity;
@@ -32,10 +38,11 @@ function closestSnapshot(snapshots, days) {
       best = s;
     }
   }
-  // Don't match a snapshot more than ~40% outside the target window - a
-  // 3-day-old snapshot standing in for "1 month ago" would be misleading.
-  const toleranceMs = days * 24 * 60 * 60 * 1000 * 0.4;
-  return best && bestDiff <= toleranceMs ? best : null;
+  // Don't match a snapshot more than ~40% outside the target window (or the
+  // explicit override) - a 3-day-old snapshot standing in for "1 month ago"
+  // would be misleading.
+  const tolerance = toleranceMs ?? days * 24 * 60 * 60 * 1000 * 0.4;
+  return best && bestDiff <= tolerance ? best : null;
 }
 
 export default async function handler(req, res) {
@@ -54,9 +61,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ enabled: true, points: [], building: true });
     }
 
-    const points = TARGETS_DAYS.map(({ label, days }) => {
-      const snap = closestSnapshot(snapshots, days);
-      return snap ? { label, total: snap.total, live: snap.live, date: snap.date } : null;
+    const points = TARGETS_DAYS.map(({ key, label, days, toleranceMs }) => {
+      const snap = closestSnapshot(snapshots, days, toleranceMs);
+      if (!snap) return null;
+      // Carry every field a snapshot might have, not just total/live - the
+      // week-on-week tracker needs ledgerUsed/tableForecast/
+      // tableOrderNotOrdered/installingSoon too. Older snapshots (recorded
+      // before those fields existed) just won't have them - the frontend
+      // treats a missing field as "no comparison available" rather than 0.
+      return {
+        key,
+        label,
+        date: snap.date,
+        total: snap.total,
+        live: snap.live,
+        ledgerUsed: snap.ledgerUsed || null,
+        tableForecast: snap.tableForecast || null,
+        tableOrderNotOrdered: snap.tableOrderNotOrdered ?? null,
+        installingSoon: snap.installingSoon || null,
+      };
     }).filter(Boolean);
 
     res.status(200).json({ enabled: true, points, snapshotCount: snapshots.length });

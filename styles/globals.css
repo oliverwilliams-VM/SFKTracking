@@ -331,6 +331,24 @@ body {
   opacity: 0.8;
 }
 
+/* Week-on-week delta chip ("+3 vs last week") - used throughout: headline
+   KPI cards, the Stock Ledger, Table Forecast, Table Order Check and
+   Installing Soon. Block-level so it drops under whatever number it's
+   attached to (a phase-count, a forecast-card-value) rather than fighting
+   that element's own font-size/centering. */
+.wow-chip {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+}
+
+.wow-flat {
+  color: var(--ink-soft);
+}
+
 .phase-card {
   background: var(--panel);
   border: 1px solid var(--border);

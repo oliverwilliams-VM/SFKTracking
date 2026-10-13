@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
+import { isLegacyKioskType, stageNumber, computeLedgerUsed } from "../lib/ledgerCalc";
 
 // Matches on the Install phase column to decide what counts as "live". Edit
 // this if the actual wording on the board differs (e.g. "Go-Live", "Trading").
@@ -57,27 +58,8 @@ function splitPhaseLabel(phase) {
 }
 
 // --- SW Funded Stock Ledger helpers -------------------------------------
-// Which kiosk variant a site needs. "Kiosk Unit Type" is the real, direct
-// per-site field (confirmed via a live schema check) - "22" Flyte Kiosks"
-// is the legacy variant, everything else (Small Format Kiosk / 27" BAU
-// Kiosks / Pending SFK BAU) is current. Corp Partner (EG on the Move/MFG)
-// is only a fallback guess for the rare case Kiosk Unit Type is blank.
-function isLegacyKioskPartner(corpPartner) {
-  const t = (corpPartner || "").trim().toLowerCase();
-  return t === "eg on the move" || t === "mfg";
-}
-function isLegacyKioskType(kioskUnitType, corpPartner) {
-  const t = (kioskUnitType || "").trim().toLowerCase();
-  if (t) return t.includes("22") && t.includes("flyte");
-  return isLegacyKioskPartner(corpPartner);
-}
-
-// Pulls the leading "6." off an Install Phase label like "6. Contract/
-// Invoice Sent" - same pattern phaseSortKey/splitPhaseLabel already use.
-function stageNumber(phase) {
-  const match = (phase || "").match(/^(\d+)\./);
-  return match ? parseInt(match[1], 10) : null;
-}
+// isLegacyKioskType and stageNumber now live in lib/ledgerCalc.js (shared
+// with the snapshot cron, for week-on-week tracking) - imported above.
 
 // Exclusive install-date buckets for the Table Order Check filter tabs - a
 // site with no date, an overdue date, or one past 6 weeks out all land in
@@ -94,18 +76,6 @@ function installBucket(installDateStr) {
   if (diffDays <= 42) return "Install 6 Weeks Out";
   return "All Others";
 }
-
-// Fixed per-site requirement for everything except the two Kiosk variants
-// and SFK Stand (all three pulled from kioskQty per site - a Stand is 1 per
-// kiosk, same count as the kiosk itself, not a flat 1 per store). ADA Unit
-// & Mount is 1 per store, every site, confirmed by Oli.
-const LEDGER_PER_SITE_DEFAULTS = {
-  "ELO4 - KDS": 2,
-  "KDS Mounts": 2,
-  ORS: 1,
-  "ORS Mount": 1,
-  "ADA Unit & Mount": 1,
-};
 
 // Simple CSS-bar charts - no charting library needed for two shapes this
 // straightforward, and it keeps styling consistent with the rest of the app.
@@ -307,6 +277,24 @@ function downloadCsv(filename, rows) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// Week-on-week delta chip - "+3 vs last week" / "-2 vs last week" / "No
+// change vs last week". Renders nothing if either side is missing (no
+// snapshot from ~7 days ago yet, or the field didn't exist on that older
+// snapshot) rather than showing a misleading 0.
+function WowChip({ current, previous }) {
+  if (typeof current !== "number" || typeof previous !== "number") return null;
+  const delta = current - previous;
+  // Deliberately not colored good/bad by direction - "more Used hardware"
+  // or "more Needed" isn't a judgement this chip should be making, it's
+  // just the raw week-on-week movement. Neutral tone throughout.
+  const text = delta === 0 ? "No change" : delta > 0 ? `+${delta}` : `${delta}`;
+  return (
+    <span className="wow-chip wow-flat" title={`${current} now vs ${previous} a week ago`}>
+      {text} vs last week
+    </span>
+  );
 }
 
 function BouncingDots() {
@@ -543,7 +531,6 @@ export default function Home() {
 
     const blank = () => Object.fromEntries(stock.hardwareTypes.map((t) => [t, 0]));
     const opening = { UK: blank(), EMEA: blank(), Total: blank() };
-    const used = { UK: blank(), EMEA: blank(), Total: blank() };
 
     (stock.onHand?.rows || []).forEach((row) => {
       const bucket = row.country === "UK" ? "UK" : row.country === "EMEA" ? "EMEA" : null;
@@ -552,39 +539,9 @@ export default function Home() {
       opening.Total[row.hardwareType] += row.qtyInStock;
     });
 
-    data.items.forEach((item) => {
-      const countryNorm = (item.country || "").trim().toLowerCase();
-      const bucket = countryNorm === "uk" || countryNorm.includes("united kingdom") ? "UK" : "EMEA";
-      const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
-      const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
-      const stage = stageNumber(item.installPhase);
-      // Stage 6-10 (contract/invoice sent onward, bounded - not an
-      // open-ended "6 and above", same correctness fix as Table Forecast)
-      // or already Live - hardware committed either way, so it counts as
-      // Used regardless of which.
-      const isUsed = live || (stage !== null && stage >= 6 && stage <= 10);
-      if (!isUsed) return;
-
-      const kioskQty = item.kioskQty || 0;
-      used[bucket][kioskType] += kioskQty;
-      used.Total[kioskType] += kioskQty;
-      // SFK Stand is 1 per kiosk, but only for the current ELO5 - Kiosk -
-      // the legacy 22" Flyte came with its own stand, not this SKU (Opening
-      // Stock confirms this: SFK Stand's opening figures match ELO5 - Kiosk
-      // exactly, 333/200, not the 22" Flyte figures).
-      if (kioskType === "ELO5 - Kiosk") {
-        used[bucket]["SFK Stand"] += kioskQty;
-        used.Total["SFK Stand"] += kioskQty;
-      }
-      Object.entries(LEDGER_PER_SITE_DEFAULTS).forEach(([type, qty]) => {
-        // ADA Unit & Mount is an EMEA-only requirement ("every store across
-        // EMEA has to have 1 unit") - UK opening stock is 0 to match, so UK
-        // sites must not be debited for it or the balance goes negative.
-        if (type === "ADA Unit & Mount" && bucket === "UK") return;
-        used[bucket][type] += qty;
-        used.Total[type] += qty;
-      });
-    });
+    // "Used" calc now lives in lib/ledgerCalc.js, shared with the snapshot
+    // cron so the week-on-week tracker computes the exact same figures.
+    const used = computeLedgerUsed(data.items, stock.hardwareTypes);
 
     const rows = stock.hardwareTypes.map((type) => {
       const buckets = ["UK", "EMEA", "Total"].map((bucket) => {
@@ -777,10 +734,18 @@ export default function Home() {
 
   const trendFor = (kind) => {
     if (!history?.enabled || !history.points?.length) return null;
+    // "week" is shown separately via WowChip's "+X vs last week" format -
+    // excluded here so it isn't duplicated as a plain absolute-value chip.
     return history.points
+      .filter((p) => p.key !== "week")
       .map((p) => ({ label: p.label, value: p[kind] }))
       .filter((p) => typeof p.value === "number");
   };
+
+  // The "1 wk ago" snapshot, used throughout for "+X vs last week" chips.
+  // null until a week of daily snapshots has accumulated (or if history
+  // isn't enabled at all - no Redis store configured).
+  const weekAgo = history?.points?.find((p) => p.key === "week") || null;
 
   // Which KPI card is expanded for a by-country breakdown - "__total__" for
   // the Total card, a phase string for a phase card, or null for none.
@@ -925,6 +890,7 @@ export default function Home() {
                 >
                   <p className="phase-count">{totals.total}</p>
                   <p className="phase-name">Total available sites</p>
+                  <WowChip current={totals.total} previous={weekAgo?.total} />
                   {trendFor("total") && (
                     <div className="trend-row">
                       {trendFor("total").map((t) => (
@@ -947,6 +913,7 @@ export default function Home() {
                   >
                     <p className="phase-count">{liveEntry[1]}</p>
                     <p className="phase-name">Live</p>
+                    <WowChip current={liveEntry[1]} previous={weekAgo?.live} />
                     {trendFor("live") && (
                       <div className="trend-row">
                         {trendFor("live").map((t) => (
@@ -1122,7 +1089,12 @@ export default function Home() {
                                   {b.bucket === "UK" ? "🇬🇧 UK" : b.bucket === "EMEA" ? "🌍 EMEA" : "Total"}
                                 </span>
                                 <span className="forecast-card-value">{b.opening}</span>
-                                <span className="forecast-card-value">{b.used}</span>
+                                <span className="forecast-card-value">
+                                  {b.used}
+                                  {b.bucket === "Total" && (
+                                    <WowChip current={b.used} previous={weekAgo?.ledgerUsed?.Total?.[row.type]} />
+                                  )}
+                                </span>
                                 <span
                                   className={`forecast-card-value ${b.balance < 0 ? "stock-cell-bad" : "stock-cell-good"}`}
                                 >
@@ -1210,9 +1182,24 @@ export default function Home() {
                               <span className="forecast-card-country">
                                 {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"}
                               </span>
-                              <span className="forecast-card-value">{r.funded}</span>
-                              <span className="forecast-card-value">{r.nonFunded}</span>
-                              <span className="forecast-card-value">{r.total}</span>
+                              <span className="forecast-card-value">
+                                {r.funded}
+                                {r.country === "Total" && (
+                                  <WowChip current={r.funded} previous={weekAgo?.tableForecast?.[metric.key]?.funded?.Total} />
+                                )}
+                              </span>
+                              <span className="forecast-card-value">
+                                {r.nonFunded}
+                                {r.country === "Total" && (
+                                  <WowChip current={r.nonFunded} previous={weekAgo?.tableForecast?.[metric.key]?.nonFunded?.Total} />
+                                )}
+                              </span>
+                              <span className="forecast-card-value">
+                                {r.total}
+                                {r.country === "Total" && (
+                                  <WowChip current={r.total} previous={weekAgo?.tableForecast?.[metric.key]?.total?.Total} />
+                                )}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -1354,6 +1341,12 @@ export default function Home() {
                               </span>
                               <span className="forecast-card-value">
                                 {tableForecast.installingSoon[key][country]}
+                                {country === "Total" && (
+                                  <WowChip
+                                    current={tableForecast.installingSoon[key][country]}
+                                    previous={weekAgo?.installingSoon?.[key]?.Total}
+                                  />
+                                )}
                               </span>
                             </div>
                           ))}
@@ -1396,7 +1389,8 @@ export default function Home() {
                       Table Order Check — Stage 8/9/10{" "}
                       <span className={`stale-count${stage8To10Summary.notOrdered.length > 0 ? " stale-count-bad" : ""}`}>
                         {stage8To10Summary.notOrdered.length} of {stage8To10Summary.rows.length} haven't ordered
-                      </span>
+                      </span>{" "}
+                      <WowChip current={stage8To10Summary.notOrdered.length} previous={weekAgo?.tableOrderNotOrdered} />
                     </h2>
                     <button
                       type="button"
