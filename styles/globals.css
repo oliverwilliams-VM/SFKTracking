@@ -928,3 +928,22 @@ body {
   font-size: 0.8rem;
   color: var(--ink-soft);
 }
+
+.ledger-panel .stock-footnote {
+  margin: 0 0 1rem;
+}
+
+.ledger-table {
+  font-size: 0.78rem;
+}
+
+.ledger-table th,
+.ledger-table td {
+  padding: 0.45rem 0.6rem;
+}
+
+.ledger-sub-th {
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.85;
+}

@@ -56,6 +56,34 @@ function splitPhaseLabel(phase) {
   return { step: null, label: phase };
 }
 
+// --- SW Funded Stock Ledger helpers -------------------------------------
+// EG on the Move and MFG are the early-adopter sites still running the
+// older 22" Flyte kiosk variant instead of the current ELO5 - Kiosk (same
+// rule as lib/stock.js's required-stock calc, duplicated here since this
+// runs client-side against data already in the page).
+function isLegacyKioskPartner(corpPartner) {
+  const t = (corpPartner || "").trim().toLowerCase();
+  return t === "eg on the move" || t === "mfg";
+}
+
+// Pulls the leading "6." off an Install Phase label like "6. Contract/
+// Invoice Sent" - same pattern phaseSortKey/splitPhaseLabel already use.
+function stageNumber(phase) {
+  const match = (phase || "").match(/^(\d+)\./);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// Fixed per-site requirement for everything except the two Kiosk variants
+// (pulled from kioskQty per site) and ADA Unit & Mount (no identified
+// per-site source yet - known gap, Opening Stock only).
+const LEDGER_PER_SITE_DEFAULTS = {
+  "ELO4 - KDS": 2,
+  "KDS Mounts": 2,
+  ORS: 1,
+  "ORS Mount": 1,
+  "SFK Stand": 1,
+};
+
 // Simple CSS-bar charts - no charting library needed for two shapes this
 // straightforward, and it keeps styling consistent with the rest of the app.
 function PipelineChart({ entries, selected, onSelect }) {
@@ -466,6 +494,64 @@ export default function Home() {
     return { rows, siteCount: stock.required?.siteCount || {} };
   }, [stock]);
 
+  // SW Funded Stock Ledger — a separate, narrower view for the bulk
+  // hardware Subway itself bought (data.items is already filtered to that
+  // population - SFK Format = Part Subway Funded / MFG Funded Site - by
+  // the API). Retrofit/Remodel sites buy their own hardware site by site,
+  // so they're out of scope here even though they're in the panel above.
+  // Pooled UK vs EMEA, not per-country, same convention as Opening Stock.
+  //
+  // Balance = Opening Stock − Used (already Live) − Accounted For
+  // (Install Phase stage 6+, not yet live). Kiosk splits into the current
+  // and legacy variant via the Corp Partner field (isLegacyKioskPartner).
+  const swFundedLedger = useMemo(() => {
+    if (!data || !stock?.hardwareTypes) return null;
+
+    const blank = () => Object.fromEntries(stock.hardwareTypes.map((t) => [t, 0]));
+    const opening = { UK: blank(), EMEA: blank(), Total: blank() };
+    const used = { UK: blank(), EMEA: blank(), Total: blank() };
+    const accounted = { UK: blank(), EMEA: blank(), Total: blank() };
+
+    (stock.onHand?.rows || []).forEach((row) => {
+      const bucket = row.country === "UK" ? "UK" : row.country === "EMEA" ? "EMEA" : null;
+      if (!bucket || !(row.hardwareType in opening[bucket])) return;
+      opening[bucket][row.hardwareType] += row.qtyInStock;
+      opening.Total[row.hardwareType] += row.qtyInStock;
+    });
+
+    data.items.forEach((item) => {
+      const countryNorm = (item.country || "").trim().toLowerCase();
+      const bucket = countryNorm === "uk" || countryNorm.includes("united kingdom") ? "UK" : "EMEA";
+      const kioskType = isLegacyKioskPartner(item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
+      const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
+      const stage = stageNumber(item.installPhase);
+      const accountedFor = !live && stage !== null && stage >= 6;
+
+      const target = live ? used : accountedFor ? accounted : null;
+      if (!target) return;
+
+      const kioskQty = item.kioskQty || 0;
+      target[bucket][kioskType] += kioskQty;
+      target.Total[kioskType] += kioskQty;
+      Object.entries(LEDGER_PER_SITE_DEFAULTS).forEach(([type, qty]) => {
+        target[bucket][type] += qty;
+        target.Total[type] += qty;
+      });
+    });
+
+    const rows = stock.hardwareTypes.map((type) => {
+      const buckets = ["UK", "EMEA", "Total"].map((bucket) => {
+        const o = opening[bucket][type];
+        const u = used[bucket][type];
+        const a = accounted[bucket][type];
+        return { bucket, opening: o, used: u, accounted: a, balance: o - u - a };
+      });
+      return { type, buckets };
+    });
+
+    return { rows };
+  }, [data, stock]);
+
   const searchResults = useMemo(() => {
     if (!data || !search.trim()) return [];
     const q = search.trim().toLowerCase();
@@ -750,13 +836,6 @@ export default function Home() {
                   <p className="loading-panel">Loading stock…</p>
                 ) : (
                   <>
-                    {stock.onHand?.configured === false && (
-                      <p className="warn-panel">
-                        Stock board isn't set up yet. Create it on Monday (Country, Hardware Type,
-                        Qty In Stock, Last Updated), set <code>MONDAY_STOCK_BOARD_ID</code> in Vercel,
-                        and on-hand counts will appear here. The Required column below is already live.
-                      </p>
-                    )}
                     {stock.onHand?.error && (
                       <p className="warn-panel">Couldn't load stock on hand: {stock.onHand.error}</p>
                     )}
@@ -805,6 +884,66 @@ export default function Home() {
                       currently. Red means a shortfall.
                     </p>
                   </>
+                )}
+              </section>
+
+              <section className="panel ledger-panel">
+                <div className="stock-header">
+                  <h2>SW Funded Stock Ledger</h2>
+                </div>
+                <p className="stock-footnote">
+                  Scoped to the bulk hardware Subway itself purchased (SFK Format = Part Subway
+                  Funded / MFG Funded Site) — Retrofit and Remodel sites buy their own, site by
+                  site, so they're excluded here even though they're counted in the panel above.
+                  Pooled UK vs EMEA, not per-country, same as how it was bought. Balance = Opening
+                  Stock − Used (already Live) − Accounted For (Install Phase stage 6+, not yet
+                  live). Kiosk splits by variant: EG on the Move and MFG, the early adopters, ran
+                  the older 22" Flyte kiosk; everyone else is on the current ELO5 - Kiosk. ADA
+                  Unit &amp; Mount has no per-site source yet, so only its Opening Stock is tracked
+                  for now.
+                </p>
+                {!stock || !data ? (
+                  <p className="loading-panel">Loading…</p>
+                ) : (
+                  <div className="stock-table-wrap">
+                    <table className="stock-table ledger-table">
+                      <thead>
+                        <tr>
+                          <th rowSpan={2}>Hardware</th>
+                          <th colSpan={4}>🇬🇧 UK</th>
+                          <th colSpan={4}>🌍 EMEA</th>
+                          <th colSpan={4}>Total</th>
+                        </tr>
+                        <tr>
+                          {["UK", "EMEA", "Total"].flatMap((bucket) =>
+                            ["Opening", "Used", "Accounted", "Balance"].map((label) => (
+                              <th key={`${bucket}-${label}`} className="ledger-sub-th">
+                                {label}
+                              </th>
+                            ))
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {swFundedLedger?.rows.map((row) => (
+                          <tr key={row.type}>
+                            <td className="stock-type-cell">{row.type}</td>
+                            {row.buckets.flatMap((b) => [
+                              <td key={`${row.type}-${b.bucket}-o`}>{b.opening}</td>,
+                              <td key={`${row.type}-${b.bucket}-u`}>{b.used}</td>,
+                              <td key={`${row.type}-${b.bucket}-a`}>{b.accounted}</td>,
+                              <td
+                                key={`${row.type}-${b.bucket}-bal`}
+                                className={b.balance < 0 ? "stock-cell-bad" : "stock-cell-good"}
+                              >
+                                <strong>{b.balance}</strong>
+                              </td>,
+                            ])}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </section>
 
