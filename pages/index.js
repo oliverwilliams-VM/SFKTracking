@@ -74,14 +74,15 @@ function stageNumber(phase) {
 }
 
 // Fixed per-site requirement for everything except the two Kiosk variants
-// (pulled from kioskQty per site) and ADA Unit & Mount (no identified
-// per-site source yet - known gap, Opening Stock only).
+// (pulled from kioskQty per site). ADA Unit & Mount is 1 per store, every
+// site, confirmed by Oli.
 const LEDGER_PER_SITE_DEFAULTS = {
   "ELO4 - KDS": 2,
   "KDS Mounts": 2,
   ORS: 1,
   "ORS Mount": 1,
   "SFK Stand": 1,
+  "ADA Unit & Mount": 1,
 };
 
 // Simple CSS-bar charts - no charting library needed for two shapes this
@@ -898,9 +899,7 @@ export default function Home() {
                   Pooled UK vs EMEA, not per-country, same as how it was bought. Balance = Opening
                   Stock − Used (already Live) − Accounted For (Install Phase stage 6+, not yet
                   live). Kiosk splits by variant: EG on the Move and MFG, the early adopters, ran
-                  the older 22" Flyte kiosk; everyone else is on the current ELO5 - Kiosk. ADA
-                  Unit &amp; Mount has no per-site source yet, so only its Opening Stock is tracked
-                  for now.
+                  the older 22" Flyte kiosk; everyone else is on the current ELO5 - Kiosk.
                 </p>
                 {!stock || !data ? (
                   <p className="loading-panel">Loading…</p>
