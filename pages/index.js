@@ -57,13 +57,19 @@ function splitPhaseLabel(phase) {
 }
 
 // --- SW Funded Stock Ledger helpers -------------------------------------
-// EG on the Move and MFG are the early-adopter sites still running the
-// older 22" Flyte kiosk variant instead of the current ELO5 - Kiosk (same
-// rule as lib/stock.js's required-stock calc, duplicated here since this
-// runs client-side against data already in the page).
+// Which kiosk variant a site needs. "Kiosk Unit Type" is the real, direct
+// per-site field (confirmed via a live schema check) - "22" Flyte Kiosks"
+// is the legacy variant, everything else (Small Format Kiosk / 27" BAU
+// Kiosks / Pending SFK BAU) is current. Corp Partner (EG on the Move/MFG)
+// is only a fallback guess for the rare case Kiosk Unit Type is blank.
 function isLegacyKioskPartner(corpPartner) {
   const t = (corpPartner || "").trim().toLowerCase();
   return t === "eg on the move" || t === "mfg";
+}
+function isLegacyKioskType(kioskUnitType, corpPartner) {
+  const t = (kioskUnitType || "").trim().toLowerCase();
+  if (t) return t.includes("22") && t.includes("flyte");
+  return isLegacyKioskPartner(corpPartner);
 }
 
 // Pulls the leading "6." off an Install Phase label like "6. Contract/
@@ -504,7 +510,7 @@ export default function Home() {
     data.items.forEach((item) => {
       const countryNorm = (item.country || "").trim().toLowerCase();
       const bucket = countryNorm === "uk" || countryNorm.includes("united kingdom") ? "UK" : "EMEA";
-      const kioskType = isLegacyKioskPartner(item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
+      const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
       const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
       const stage = stageNumber(item.installPhase);
       const accountedFor = !live && stage !== null && stage >= 6;
@@ -544,7 +550,7 @@ export default function Home() {
     return data.items.map((item) => {
       const countryNorm = (item.country || "").trim().toLowerCase();
       const bucket = countryNorm === "uk" || countryNorm.includes("united kingdom") ? "UK" : "EMEA";
-      const kioskType = isLegacyKioskPartner(item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
+      const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
       const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
       const stage = stageNumber(item.installPhase);
       const accountedFor = !live && stage !== null && stage >= 6;
@@ -554,6 +560,7 @@ export default function Home() {
         bucket,
         installPhase: item.installPhase || "",
         corpPartner: item.corpPartner || "",
+        kioskUnitType: item.kioskUnitType || "",
         kioskType,
         kioskQty: item.kioskQty || 0,
         kioskQtySource: item.kioskQtySource || "none",
@@ -877,6 +884,7 @@ export default function Home() {
                             "Bucket",
                             "Install Phase (as read)",
                             "Corp Partner",
+                            "Kiosk Unit Type (as read)",
                             "Kiosk Type",
                             "Kiosk Qty",
                             "Kiosk Qty Source",
@@ -888,6 +896,7 @@ export default function Home() {
                             r.bucket,
                             r.installPhase,
                             r.corpPartner,
+                            r.kioskUnitType,
                             r.kioskType,
                             r.kioskQty,
                             r.kioskQtySource,

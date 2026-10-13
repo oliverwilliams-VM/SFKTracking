@@ -29,13 +29,14 @@ export default async function handler(req, res) {
   try {
     const items = await fetchAllSignUpItemsForDebug();
 
-    const { installPhase, sfkFormat, corpPartner, country, live, minStage, maxStage } = req.query;
+    const { installPhase, sfkFormat, corpPartner, kioskUnitType, country, live, minStage, maxStage } = req.query;
     const contains = (value, needle) => (value || "").toLowerCase().includes(needle.toLowerCase());
 
     const matching = items.filter((item) => {
       if (installPhase && !contains(item.installPhase, installPhase)) return false;
       if (sfkFormat && !contains(item.sfkFormat, sfkFormat)) return false;
       if (corpPartner && !contains(item.corpPartner, corpPartner)) return false;
+      if (kioskUnitType && !contains(item.kioskUnitType, kioskUnitType)) return false;
       if (country && !contains(item.country, country)) return false;
       if (live === "true" && !item.isLive) return false;
       if (live === "false" && item.isLive) return false;
