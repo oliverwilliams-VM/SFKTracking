@@ -563,22 +563,28 @@ export default function Home() {
   }, [data]);
 
   // Table Forecast rows — Funded (SFK population), Whole Estate (every
-  // not-yet-live site), and Non-Funded as the difference between them
-  // (the FZE self-purchased Retrofit/Remodel population), one row per
-  // "Type of Table" shape plus a Total row.
+  // not-yet-live site), and Non-Funded as the difference between them (the
+  // FZE self-purchased Retrofit/Remodel population). Each scope is split
+  // into Total / Stage 6+ / Stage 5 (and below), one row per "Type of
+  // Table" shape plus a Total row.
+  const STAGE_BUCKETS = ["total", "stage6Plus", "stage5Below"];
   const tableForecastRows = useMemo(() => {
     if (!tableForecast) return null;
+    const diff = (a, b) => a - b;
     const rows = tableForecast.tableTypes.map((type) => {
-      const funded = tableForecast.funded[type] || 0;
-      const wholeEstate = tableForecast.wholeEstate[type] || 0;
-      return { type, funded, wholeEstate, nonFunded: wholeEstate - funded };
+      const scopes = STAGE_BUCKETS.map((bucket) => {
+        const funded = tableForecast.funded[bucket][type] || 0;
+        const wholeEstate = tableForecast.wholeEstate[bucket][type] || 0;
+        return { bucket, funded, wholeEstate, nonFunded: diff(wholeEstate, funded) };
+      });
+      return { type, scopes };
     });
-    const totalFunded = tableForecast.fundedSites || 0;
-    const totalWholeEstate = tableForecast.wholeEstateSites || 0;
-    return {
-      rows,
-      totals: { funded: totalFunded, wholeEstate: totalWholeEstate, nonFunded: totalWholeEstate - totalFunded },
-    };
+    const totals = STAGE_BUCKETS.map((bucket) => {
+      const funded = tableForecast.fundedSites[bucket] || 0;
+      const wholeEstate = tableForecast.wholeEstateSites[bucket] || 0;
+      return { bucket, funded, wholeEstate, nonFunded: diff(wholeEstate, funded) };
+    });
+    return { rows, totals };
   }, [tableForecast]);
 
   const searchResults = useMemo(() => {
@@ -960,6 +966,8 @@ export default function Home() {
                   Whole Estate = every not-yet-live site across Interrupt, Disrupt, Small Format,
                   Retrofit and Remodel/NRO, funded or not. Non-Funded is the difference between the
                   two — the FZE self-purchased Retrofit/Remodel sites, who buy their own tables.
+                  Each is also split by Install Phase: Stage 6+ (far enough along to be a confident
+                  near-term need) vs Stage 5 (earlier sign-ups, including non-numbered admin states).
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
@@ -967,37 +975,50 @@ export default function Home() {
                   <p className="loading-panel">Loading…</p>
                 ) : (
                   <div className="stock-table-wrap">
-                    <table className="stock-table">
+                    <table className="stock-table ledger-table">
                       <thead>
                         <tr>
-                          <th>Table Shape</th>
-                          <th>Funded</th>
-                          <th>Whole Estate</th>
-                          <th>Non-Funded (Retrofit/Remodel)</th>
+                          <th rowSpan={2}>Table Shape</th>
+                          <th colSpan={3}>Total</th>
+                          <th colSpan={3}>Stage 6+</th>
+                          <th colSpan={3}>Stage 5</th>
+                        </tr>
+                        <tr>
+                          {["total", "stage6Plus", "stage5Below"].flatMap((bucket) =>
+                            ["Funded", "Whole Estate", "Non-Funded"].map((label) => (
+                              <th key={`${bucket}-${label}`} className="ledger-sub-th">
+                                {label}
+                              </th>
+                            ))
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {tableForecastRows.rows.map((row) => (
                           <tr key={row.type}>
                             <td className="stock-type-cell">{row.type}</td>
-                            <td>{row.funded}</td>
-                            <td>{row.wholeEstate}</td>
-                            <td>{row.nonFunded}</td>
+                            {row.scopes.flatMap((s) => [
+                              <td key={`${row.type}-${s.bucket}-f`}>{s.funded}</td>,
+                              <td key={`${row.type}-${s.bucket}-w`}>{s.wholeEstate}</td>,
+                              <td key={`${row.type}-${s.bucket}-n`}>{s.nonFunded}</td>,
+                            ])}
                           </tr>
                         ))}
                         <tr>
                           <td className="stock-type-cell">
                             <strong>Total</strong>
                           </td>
-                          <td>
-                            <strong>{tableForecastRows.totals.funded}</strong>
-                          </td>
-                          <td>
-                            <strong>{tableForecastRows.totals.wholeEstate}</strong>
-                          </td>
-                          <td>
-                            <strong>{tableForecastRows.totals.nonFunded}</strong>
-                          </td>
+                          {tableForecastRows.totals.flatMap((s) => [
+                            <td key={`total-${s.bucket}-f`}>
+                              <strong>{s.funded}</strong>
+                            </td>,
+                            <td key={`total-${s.bucket}-w`}>
+                              <strong>{s.wholeEstate}</strong>
+                            </td>,
+                            <td key={`total-${s.bucket}-n`}>
+                              <strong>{s.nonFunded}</strong>
+                            </td>,
+                          ])}
                         </tr>
                       </tbody>
                     </table>

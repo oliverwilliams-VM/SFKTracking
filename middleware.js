@@ -16,6 +16,7 @@ export function middleware(req) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/login") ||
     pathname.startsWith("/api/snapshot") || // cron job has its own auth
+    pathname.startsWith("/api/debug-query") || // has its own token, gated separately
     pathname.startsWith("/_next") ||
     pathname.match(/\.(png|jpg|jpeg|svg|ico)$/)
   ) {
