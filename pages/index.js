@@ -626,19 +626,66 @@ export default function Home() {
         nonFunded: countryRows.reduce((s, r) => s + r.nonFunded, 0),
       };
 
-      // Table shape breakdown for stock forecasting - Whole Estate (the
-      // actual physical need, funded or not) by UK/EMEA/Total.
+      // Table shape breakdown for stock forecasting - Funded vs Non-Funded,
+      // by UK/EMEA/Total. Non-Funded by shape is Whole Estate minus Funded
+      // (same diff convention as the Stage 5- card's headline Non-Funded -
+      // the stricter shipping-date rule only applies to the headline total,
+      // not tracked per shape).
       const tableTypes = tableForecast.tableTypes || [];
-      const shapeRows = ["UK", "EMEA"].map((country) => {
-        const byType = tableForecast.wholeEstate[country][key]?.byType || {};
-        return { country, counts: tableTypes.map((t) => byType[t] || 0) };
+      const shapeCountryRows = ["UK", "EMEA"].flatMap((country) => {
+        const wholeByType = tableForecast.wholeEstate[country][key]?.byType || {};
+        const fundedByType = tableForecast.funded[country][key]?.byType || {};
+        const fundedCounts = tableTypes.map((t) => fundedByType[t] || 0);
+        const nonFundedCounts = tableTypes.map((t) => (wholeByType[t] || 0) - (fundedByType[t] || 0));
+        return [
+          { country, scope: "Funded", counts: fundedCounts },
+          { country, scope: "Non-Funded", counts: nonFundedCounts },
+        ];
       });
-      const shapeTotal = {
+      const shapeTotalRows = ["Funded", "Non-Funded"].map((scope) => ({
         country: "Total",
-        counts: tableTypes.map((_, i) => shapeRows.reduce((s, r) => s + r.counts[i], 0)),
-      };
+        scope,
+        counts: tableTypes.map((_, i) =>
+          shapeCountryRows.filter((r) => r.scope === scope).reduce((s, r) => s + r.counts[i], 0)
+        ),
+      }));
 
-      return { key, label, rows: [...countryRows, total], tableTypes, shapeRows: [...shapeRows, shapeTotal] };
+      return {
+        key,
+        label,
+        rows: [...countryRows, total],
+        tableTypes,
+        shapeRows: [...shapeCountryRows, ...shapeTotalRows],
+      };
+    });
+  }, [tableForecast]);
+
+  const INSTALLING_SOON_METRICS = [
+    { key: "next2Weeks", label: "Next 2 Weeks" },
+    { key: "next4Weeks", label: "Next 4 Weeks" },
+  ];
+  const installingSoonShapeSummary = useMemo(() => {
+    if (!tableForecast?.installingSoonFunded) return null;
+    const tableTypes = tableForecast.tableTypes || [];
+    return INSTALLING_SOON_METRICS.map(({ key, label }) => {
+      const shapeCountryRows = ["UK", "EMEA"].flatMap((country) => {
+        const wholeByType = tableForecast.installingSoonWholeEstate[country][key]?.byType || {};
+        const fundedByType = tableForecast.installingSoonFunded[country][key]?.byType || {};
+        const fundedCounts = tableTypes.map((t) => fundedByType[t] || 0);
+        const nonFundedCounts = tableTypes.map((t) => (wholeByType[t] || 0) - (fundedByType[t] || 0));
+        return [
+          { country, scope: "Funded", counts: fundedCounts },
+          { country, scope: "Non-Funded", counts: nonFundedCounts },
+        ];
+      });
+      const shapeTotalRows = ["Funded", "Non-Funded"].map((scope) => ({
+        country: "Total",
+        scope,
+        counts: tableTypes.map((_, i) =>
+          shapeCountryRows.filter((r) => r.scope === scope).reduce((s, r) => s + r.counts[i], 0)
+        ),
+      }));
+      return { key, label, tableTypes, shapeRows: [...shapeCountryRows, ...shapeTotalRows] };
     });
   }, [tableForecast]);
 
@@ -1064,9 +1111,8 @@ export default function Home() {
                   population above. Whole Estate = every in-scope, not-yet-live site (Interrupt,
                   Disrupt, Small Format, Retrofit, Remodel/NRO), funded or not. Non-Funded is the
                   difference — the FZE self-purchased Retrofit/Remodel sites, who buy their own
-                  tables. Table shape breakdown below each card is Whole Estate (the full physical
-                  need, for stock forecasting) - per-site detail with Funded/Non-Funded split is in
-                  the CSV download.
+                  tables. Table shape breakdown below each card is split Funded/Non-Funded for stock
+                  forecasting - per-site detail is in the CSV download.
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
@@ -1098,7 +1144,7 @@ export default function Home() {
                             </div>
                           ))}
                         </div>
-                        <div className="forecast-card-subhead">By Table Shape (Whole Estate)</div>
+                        <div className="forecast-card-subhead">By Table Shape — Funded / Non-Funded</div>
                         <div className="forecast-card-table">
                           <div className="forecast-card-row forecast-card-head shape-breakdown-row">
                             <span></span>
@@ -1109,10 +1155,11 @@ export default function Home() {
                           {metric.shapeRows.map((r) => (
                             <div
                               className={`forecast-card-row shape-breakdown-row${r.country === "Total" ? " total" : ""}`}
-                              key={r.country}
+                              key={`${r.country}-${r.scope}`}
                             >
                               <span className="forecast-card-country">
-                                {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"}
+                                {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"} ·{" "}
+                                {r.scope}
                               </span>
                               {r.counts.map((c, i) => (
                                 <span className="forecast-card-value" key={metric.tableTypes[i]}>
@@ -1138,12 +1185,14 @@ export default function Home() {
                       downloadCsv(
                         `installing-soon-${new Date().toISOString().slice(0, 10)}.csv`,
                         [
-                          ["Site", "Country", "Install Date", "Install Phase (as read)"],
+                          ["Site", "Country", "Install Date", "Install Phase (as read)", "Funded", "Table Shape"],
                           ...(tableForecast?.installingSoonRows || []).map((r) => [
                             r.name,
                             r.country,
                             r.installDate,
                             r.installPhase,
+                            r.funded ? "Yes" : "No",
+                            r.tableType,
                           ]),
                         ]
                       )
@@ -1158,14 +1207,11 @@ export default function Home() {
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
-                ) : !tableForecast ? (
+                ) : !tableForecast || !installingSoonShapeSummary ? (
                   <p className="loading-panel">Loading…</p>
                 ) : (
                   <div className="forecast-grid installing-soon-grid">
-                    {[
-                      { key: "next2Weeks", label: "Next 2 Weeks" },
-                      { key: "next4Weeks", label: "Next 4 Weeks" },
-                    ].map(({ key, label }) => (
+                    {installingSoonShapeSummary.map(({ key, label, tableTypes, shapeRows }) => (
                       <div className="forecast-card" key={key}>
                         <h3>{label}</h3>
                         <div className="forecast-card-table">
@@ -1184,6 +1230,31 @@ export default function Home() {
                               <span className="forecast-card-value">
                                 {tableForecast.installingSoon[key][country]}
                               </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="forecast-card-subhead">By Table Shape — Funded / Non-Funded</div>
+                        <div className="forecast-card-table">
+                          <div className="forecast-card-row forecast-card-head shape-breakdown-row">
+                            <span></span>
+                            {tableTypes.map((t) => (
+                              <span key={t}>{t}</span>
+                            ))}
+                          </div>
+                          {shapeRows.map((r) => (
+                            <div
+                              className={`forecast-card-row shape-breakdown-row${r.country === "Total" ? " total" : ""}`}
+                              key={`${r.country}-${r.scope}`}
+                            >
+                              <span className="forecast-card-country">
+                                {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"} ·{" "}
+                                {r.scope}
+                              </span>
+                              {r.counts.map((c, i) => (
+                                <span className="forecast-card-value" key={tableTypes[i]}>
+                                  {c}
+                                </span>
+                              ))}
                             </div>
                           ))}
                         </div>
