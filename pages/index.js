@@ -80,14 +80,14 @@ function stageNumber(phase) {
 }
 
 // Fixed per-site requirement for everything except the two Kiosk variants
-// (pulled from kioskQty per site). ADA Unit & Mount is 1 per store, every
-// site, confirmed by Oli.
+// and SFK Stand (all three pulled from kioskQty per site - a Stand is 1 per
+// kiosk, same count as the kiosk itself, not a flat 1 per store). ADA Unit
+// & Mount is 1 per store, every site, confirmed by Oli.
 const LEDGER_PER_SITE_DEFAULTS = {
   "ELO4 - KDS": 2,
   "KDS Mounts": 2,
   ORS: 1,
   "ORS Mount": 1,
-  "SFK Stand": 1,
   "ADA Unit & Mount": 1,
 };
 
@@ -523,6 +523,10 @@ export default function Home() {
       const kioskQty = item.kioskQty || 0;
       used[bucket][kioskType] += kioskQty;
       used.Total[kioskType] += kioskQty;
+      // SFK Stand is 1 per kiosk, not a flat 1 per site - same count as
+      // whichever kiosk type this site has, current or legacy.
+      used[bucket]["SFK Stand"] += kioskQty;
+      used.Total["SFK Stand"] += kioskQty;
       Object.entries(LEDGER_PER_SITE_DEFAULTS).forEach(([type, qty]) => {
         // ADA Unit & Mount is an EMEA-only requirement ("every store across
         // EMEA has to have 1 unit") - UK opening stock is 0 to match, so UK
