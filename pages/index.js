@@ -523,10 +523,14 @@ export default function Home() {
       const kioskQty = item.kioskQty || 0;
       used[bucket][kioskType] += kioskQty;
       used.Total[kioskType] += kioskQty;
-      // SFK Stand is 1 per kiosk, not a flat 1 per site - same count as
-      // whichever kiosk type this site has, current or legacy.
-      used[bucket]["SFK Stand"] += kioskQty;
-      used.Total["SFK Stand"] += kioskQty;
+      // SFK Stand is 1 per kiosk, but only for the current ELO5 - Kiosk -
+      // the legacy 22" Flyte came with its own stand, not this SKU (Opening
+      // Stock confirms this: SFK Stand's opening figures match ELO5 - Kiosk
+      // exactly, 333/200, not the 22" Flyte figures).
+      if (kioskType === "ELO5 - Kiosk") {
+        used[bucket]["SFK Stand"] += kioskQty;
+        used.Total["SFK Stand"] += kioskQty;
+      }
       Object.entries(LEDGER_PER_SITE_DEFAULTS).forEach(([type, qty]) => {
         // ADA Unit & Mount is an EMEA-only requirement ("every store across
         // EMEA has to have 1 unit") - UK opening stock is 0 to match, so UK
