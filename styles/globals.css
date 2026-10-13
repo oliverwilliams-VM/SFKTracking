@@ -1098,6 +1098,17 @@ body {
   grid-template-columns: 4.5rem 1fr;
 }
 
+/* Ledger rows now carry 4 value columns (Opening/Live/Pipeline/Balance)
+   instead of the default 3 - narrower value font so Live/Pipeline's WoW
+   chip underneath still fits without wrapping oddly in a 4-column card. */
+.ledger-row {
+  grid-template-columns: 4rem repeat(4, 1fr);
+}
+
+.ledger-row .forecast-card-value {
+  font-size: 1.1rem;
+}
+
 .installing-soon-row .forecast-card-value {
   font-size: 1.6rem;
 }

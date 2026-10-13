@@ -519,13 +519,13 @@ export default function Home() {
   // so they're out of scope here even though they're in the panel above.
   // Pooled UK vs EMEA, not per-country, same convention as Opening Stock.
   //
-  // Balance = Opening Stock − Used. "Used" = hardware already committed:
-  // sites at Install Phase stage 6-10 (contract/invoice sent onward,
-  // bounded - not open-ended - to exactly 6 through 10), including
-  // everything already Live - one combined figure rather than two separate
-  // columns, since both represent hardware that's already spoken for.
-  // Kiosk splits into the current and legacy variant via the Kiosk Unit
-  // Type / Corp Partner fields (isLegacyKioskType).
+  // Balance = Opening Stock − Used. "Used" = hardware already committed,
+  // shown as two separate figures rather than one blended number: Live
+  // (already installed) and Pipeline (Install Phase stage 6-10 - bounded,
+  // not an open-ended "6 and above" - committed but not yet installed).
+  // Balance still nets off both together. Kiosk splits into the current and
+  // legacy variant via the Kiosk Unit Type / Corp Partner fields
+  // (isLegacyKioskType).
   const swFundedLedger = useMemo(() => {
     if (!data || !stock?.hardwareTypes) return null;
 
@@ -539,15 +539,18 @@ export default function Home() {
       opening.Total[row.hardwareType] += row.qtyInStock;
     });
 
-    // "Used" calc now lives in lib/ledgerCalc.js, shared with the snapshot
-    // cron so the week-on-week tracker computes the exact same figures.
-    const used = computeLedgerUsed(data.items, stock.hardwareTypes);
+    // Live/Pipeline/Used calc now lives in lib/ledgerCalc.js, shared with
+    // the snapshot cron so the week-on-week tracker computes the exact same
+    // figures.
+    const { live, pipeline, used } = computeLedgerUsed(data.items, stock.hardwareTypes);
 
     const rows = stock.hardwareTypes.map((type) => {
       const buckets = ["UK", "EMEA", "Total"].map((bucket) => {
         const o = opening[bucket][type];
+        const l = live[bucket][type];
+        const p = pipeline[bucket][type];
         const u = used[bucket][type];
-        return { bucket, opening: o, used: u, balance: o - u };
+        return { bucket, opening: o, live: l, pipeline: p, used: u, balance: o - u };
       });
       return { type, buckets };
     });
@@ -1051,7 +1054,10 @@ export default function Home() {
                     Download site-level detail (CSV)
                   </button>
                 </div>
-                <p className="stock-footnote">This is for sites at Stage 6-10, including Live.</p>
+                <p className="stock-footnote">
+                  Live = already installed. Pipeline = Stage 6-10, committed but not yet installed. Balance
+                  nets off both.
+                </p>
                 {stockError ? (
                   <p className="error-panel">{stockError}</p>
                 ) : !stock || !data ? (
@@ -1074,15 +1080,16 @@ export default function Home() {
                             </span>
                           </div>
                           <div className="forecast-card-table">
-                            <div className="forecast-card-row forecast-card-head">
+                            <div className="forecast-card-row forecast-card-head ledger-row">
                               <span></span>
                               <span>Opening</span>
-                              <span>Used</span>
+                              <span>Live</span>
+                              <span>Pipeline</span>
                               <span>Balance</span>
                             </div>
                             {row.buckets.map((b) => (
                               <div
-                                className={`forecast-card-row${b.bucket === "Total" ? " total" : ""}`}
+                                className={`forecast-card-row ledger-row${b.bucket === "Total" ? " total" : ""}`}
                                 key={b.bucket}
                               >
                                 <span className="forecast-card-country">
@@ -1090,9 +1097,18 @@ export default function Home() {
                                 </span>
                                 <span className="forecast-card-value">{b.opening}</span>
                                 <span className="forecast-card-value">
-                                  {b.used}
+                                  {b.live}
                                   {b.bucket === "Total" && (
-                                    <WowChip current={b.used} previous={weekAgo?.ledgerUsed?.Total?.[row.type]} />
+                                    <WowChip current={b.live} previous={weekAgo?.ledgerUsed?.live?.Total?.[row.type]} />
+                                  )}
+                                </span>
+                                <span className="forecast-card-value">
+                                  {b.pipeline}
+                                  {b.bucket === "Total" && (
+                                    <WowChip
+                                      current={b.pipeline}
+                                      previous={weekAgo?.ledgerUsed?.pipeline?.Total?.[row.type]}
+                                    />
                                   )}
                                 </span>
                                 <span
