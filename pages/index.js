@@ -333,6 +333,8 @@ export default function Home() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [stock, setStock] = useState(null);
   const [stockError, setStockError] = useState(null);
+  const [tableForecast, setTableForecast] = useState(null);
+  const [tableForecastError, setTableForecastError] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -371,6 +373,14 @@ export default function Home() {
       })
       .then(setStock)
       .catch((e) => setStockError(e.message));
+    fetch("/api/table-forecast")
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error || "Failed to load the table forecast");
+        return json;
+      })
+      .then(setTableForecast)
+      .catch((e) => setTableForecastError(e.message));
   }, []);
 
   // Auto-refresh: remember the toggle across visits, and only run the timer
@@ -546,10 +556,30 @@ export default function Home() {
         corpPartner: item.corpPartner || "",
         kioskType,
         kioskQty: item.kioskQty || 0,
+        kioskQtySource: item.kioskQtySource || "none",
         classification: live ? "Used (Live)" : accountedFor ? "Accounted For (stage 6+)" : "Neither",
       };
     });
   }, [data]);
+
+  // Table Forecast rows — Funded (SFK population), Whole Estate (every
+  // not-yet-live site), and Non-Funded as the difference between them
+  // (the FZE self-purchased Retrofit/Remodel population), one row per
+  // "Type of Table" shape plus a Total row.
+  const tableForecastRows = useMemo(() => {
+    if (!tableForecast) return null;
+    const rows = tableForecast.tableTypes.map((type) => {
+      const funded = tableForecast.funded[type] || 0;
+      const wholeEstate = tableForecast.wholeEstate[type] || 0;
+      return { type, funded, wholeEstate, nonFunded: wholeEstate - funded };
+    });
+    const totalFunded = tableForecast.fundedSites || 0;
+    const totalWholeEstate = tableForecast.wholeEstateSites || 0;
+    return {
+      rows,
+      totals: { funded: totalFunded, wholeEstate: totalWholeEstate, nonFunded: totalWholeEstate - totalFunded },
+    };
+  }, [tableForecast]);
 
   const searchResults = useMemo(() => {
     if (!data || !search.trim()) return [];
@@ -843,6 +873,7 @@ export default function Home() {
                             "Corp Partner",
                             "Kiosk Type",
                             "Kiosk Qty",
+                            "Kiosk Qty Source",
                             "Classification",
                           ],
                           ...ledgerDetailRows.map((r) => [
@@ -853,6 +884,7 @@ export default function Home() {
                             r.corpPartner,
                             r.kioskType,
                             r.kioskQty,
+                            r.kioskQtySource,
                             r.classification,
                           ]),
                         ]
@@ -912,6 +944,61 @@ export default function Home() {
                             ])}
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <section className="panel ledger-panel">
+                <div className="stock-header">
+                  <h2>Table Forecast</h2>
+                </div>
+                <p className="stock-footnote">
+                  Flat 1 table per site (no per-site quantity field exists on Monday), broken down
+                  by "Type of Table" shape. Funded = the SW Funded Stock Ledger population above.
+                  Whole Estate = every not-yet-live site across Interrupt, Disrupt, Small Format,
+                  Retrofit and Remodel/NRO, funded or not. Non-Funded is the difference between the
+                  two — the FZE self-purchased Retrofit/Remodel sites, who buy their own tables.
+                </p>
+                {tableForecastError ? (
+                  <p className="error-panel">{tableForecastError}</p>
+                ) : !tableForecastRows ? (
+                  <p className="loading-panel">Loading…</p>
+                ) : (
+                  <div className="stock-table-wrap">
+                    <table className="stock-table">
+                      <thead>
+                        <tr>
+                          <th>Table Shape</th>
+                          <th>Funded</th>
+                          <th>Whole Estate</th>
+                          <th>Non-Funded (Retrofit/Remodel)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableForecastRows.rows.map((row) => (
+                          <tr key={row.type}>
+                            <td className="stock-type-cell">{row.type}</td>
+                            <td>{row.funded}</td>
+                            <td>{row.wholeEstate}</td>
+                            <td>{row.nonFunded}</td>
+                          </tr>
+                        ))}
+                        <tr>
+                          <td className="stock-type-cell">
+                            <strong>Total</strong>
+                          </td>
+                          <td>
+                            <strong>{tableForecastRows.totals.funded}</strong>
+                          </td>
+                          <td>
+                            <strong>{tableForecastRows.totals.wholeEstate}</strong>
+                          </td>
+                          <td>
+                            <strong>{tableForecastRows.totals.nonFunded}</strong>
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
