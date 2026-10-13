@@ -574,7 +574,7 @@ export default function Home() {
   // FZE self-purchased Retrofit/Remodel population). Each scope is split
   // into Total / Stage 6+ / Stage 5 (and below), one row per "Type of
   // Table" shape plus a Total row.
-  const STAGE_BUCKETS = ["total", "stage6Plus", "stage5Below"];
+  const STAGE_BUCKETS = ["stage5Below", "stage6Plus", "total"];
   const tableForecastRows = useMemo(() => {
     if (!tableForecast) return null;
     const diff = (a, b) => a - b;
@@ -975,8 +975,9 @@ export default function Home() {
                   Whole Estate = every not-yet-live site across Interrupt, Disrupt, Small Format,
                   Retrofit and Remodel/NRO, funded or not. Non-Funded is the difference between the
                   two — the FZE self-purchased Retrofit/Remodel sites, who buy their own tables.
-                  Each is also split by Install Phase: Stage 6+ (far enough along to be a confident
-                  near-term need) vs Stage 5 (earlier sign-ups, including non-numbered admin states).
+                  Each is also split by Install Phase: Stage 0-5 (earlier sign-ups, including
+                  non-numbered admin states) vs Stage 6+ (far enough along to be a confident
+                  near-term need), plus a Total.
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
@@ -988,12 +989,12 @@ export default function Home() {
                       <thead>
                         <tr>
                           <th rowSpan={2}>Table Shape</th>
-                          <th colSpan={3}>Total</th>
+                          <th colSpan={3}>Stage 0-5</th>
                           <th colSpan={3}>Stage 6+</th>
-                          <th colSpan={3}>Stage 5</th>
+                          <th colSpan={3}>Total</th>
                         </tr>
                         <tr>
-                          {["total", "stage6Plus", "stage5Below"].flatMap((bucket) =>
+                          {["stage5Below", "stage6Plus", "total"].flatMap((bucket) =>
                             ["Funded", "Whole Estate", "Non-Funded"].map((label) => (
                               <th key={`${bucket}-${label}`} className="ledger-sub-th">
                                 {label}
