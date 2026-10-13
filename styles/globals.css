@@ -1108,6 +1108,79 @@ body {
   white-space: nowrap;
 }
 
+button.forecast-card-value {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  padding: 0.1rem 0.2rem;
+  margin: 0;
+}
+
+.forecast-card-value-clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.forecast-card-value-clickable:hover:not(:disabled) {
+  background: var(--panel-alt);
+  color: var(--accent);
+}
+
+.forecast-card-value-clickable:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.forecast-card-value-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.shape-drilldown {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.shape-drilldown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin-bottom: 0.6rem;
+}
+
+.shape-drilldown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.shape-drilldown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.shape-drilldown-name {
+  font-weight: 600;
+}
+
+.shape-drilldown-meta {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .ledger-grid {
     grid-template-columns: repeat(2, 1fr);

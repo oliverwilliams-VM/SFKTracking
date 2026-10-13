@@ -702,6 +702,26 @@ export default function Home() {
     });
   }, [tableForecast]);
 
+  // Click-through for a By Table Shape cell (Needed cards) - shows the
+  // actual sites behind that count. { metricKey, country, scope, tableType }
+  // or null for none. "Total" country means no country filter.
+  const [shapeDrilldown, setShapeDrilldown] = useState(null);
+  const shapeDrilldownItems = useMemo(() => {
+    if (!shapeDrilldown || !tableForecast?.detailRows) return [];
+    const { metricKey, country, scope, tableType } = shapeDrilldown;
+    return tableForecast.detailRows.filter((r) => {
+      if (r.metric !== metricKey) return false;
+      if (country !== "Total" && r.country !== country) return false;
+      if (r.tableType !== tableType) return false;
+      if (scope === "Funded") return r.funded;
+      // Non-Funded: Stage 6+ uses the stricter shipping-date-ready rule
+      // (matching nonFundedShippingReadyByType), Stage 5- is the plain diff
+      // (every non-funded site) - same definitions as the summary above.
+      if (r.funded) return false;
+      return metricKey === "stage6Plus" ? Boolean(r.shippingDate) : true;
+    });
+  }, [shapeDrilldown, tableForecast]);
+
   // Stage 8/9/10 table-order check - the ones that haven't ordered yet are
   // the actionable callout, sorted to the top.
   const stage8To10Summary = useMemo(() => {
@@ -1187,14 +1207,67 @@ export default function Home() {
                                 {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"} ·{" "}
                                 {r.scope}
                               </span>
-                              {r.counts.map((c, i) => (
-                                <span className="forecast-card-value" key={metric.tableTypes[i]}>
-                                  {c}
-                                </span>
-                              ))}
+                              {r.counts.map((c, i) => {
+                                const tableType = metric.tableTypes[i];
+                                const isActive =
+                                  shapeDrilldown?.metricKey === metric.key &&
+                                  shapeDrilldown?.country === r.country &&
+                                  shapeDrilldown?.scope === r.scope &&
+                                  shapeDrilldown?.tableType === tableType;
+                                return (
+                                  <button
+                                    type="button"
+                                    className={`forecast-card-value forecast-card-value-clickable${isActive ? " forecast-card-value-active" : ""}`}
+                                    key={tableType}
+                                    disabled={c === 0}
+                                    onClick={() =>
+                                      setShapeDrilldown(
+                                        isActive
+                                          ? null
+                                          : { metricKey: metric.key, country: r.country, scope: r.scope, tableType }
+                                      )
+                                    }
+                                  >
+                                    {c}
+                                  </button>
+                                );
+                              })}
                             </div>
                           ))}
                         </div>
+                        {shapeDrilldown?.metricKey === metric.key && (
+                          <div className="shape-drilldown">
+                            <div className="shape-drilldown-header">
+                              <span>
+                                {shapeDrilldown.country === "Total"
+                                  ? "All countries"
+                                  : `${flagFor(shapeDrilldown.country)} ${shapeDrilldown.country}`}{" "}
+                                · {shapeDrilldown.scope} · {shapeDrilldown.tableType} (
+                                {shapeDrilldownItems.length})
+                              </span>
+                              <button
+                                type="button"
+                                className="breakdown-close"
+                                onClick={() => setShapeDrilldown(null)}
+                              >
+                                Close
+                              </button>
+                            </div>
+                            <div className="shape-drilldown-list">
+                              {shapeDrilldownItems.map((r) => (
+                                <div className="shape-drilldown-row" key={r.name}>
+                                  <span className="shape-drilldown-name">{r.name}</span>
+                                  <span className="shape-drilldown-meta">
+                                    {flagFor(r.country)} {r.country || "—"} · {r.installPhase || "—"}
+                                  </span>
+                                </div>
+                              ))}
+                              {shapeDrilldownItems.length === 0 && (
+                                <p className="breakdown-empty">No sites match.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
