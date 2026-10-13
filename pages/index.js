@@ -489,16 +489,18 @@ export default function Home() {
   // so they're out of scope here even though they're in the panel above.
   // Pooled UK vs EMEA, not per-country, same convention as Opening Stock.
   //
-  // Balance = Opening Stock − Used (already Live) − Accounted For
-  // (Install Phase stage 6+, not yet live). Kiosk splits into the current
-  // and legacy variant via the Corp Partner field (isLegacyKioskPartner).
+  // Balance = Opening Stock − Used. "Used" = hardware already committed:
+  // sites at Install Phase stage 6+ (contract/invoice sent onward),
+  // including everything already Live - one combined figure rather than
+  // two separate columns, since both represent hardware that's already
+  // spoken for. Kiosk splits into the current and legacy variant via the
+  // Kiosk Unit Type / Corp Partner fields (isLegacyKioskType).
   const swFundedLedger = useMemo(() => {
     if (!data || !stock?.hardwareTypes) return null;
 
     const blank = () => Object.fromEntries(stock.hardwareTypes.map((t) => [t, 0]));
     const opening = { UK: blank(), EMEA: blank(), Total: blank() };
     const used = { UK: blank(), EMEA: blank(), Total: blank() };
-    const accounted = { UK: blank(), EMEA: blank(), Total: blank() };
 
     (stock.onHand?.rows || []).forEach((row) => {
       const bucket = row.country === "UK" ? "UK" : row.country === "EMEA" ? "EMEA" : null;
@@ -513,17 +515,21 @@ export default function Home() {
       const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
       const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
       const stage = stageNumber(item.installPhase);
-      const accountedFor = !live && stage !== null && stage >= 6;
-
-      const target = live ? used : accountedFor ? accounted : null;
-      if (!target) return;
+      // Stage 6+ (contract/invoice sent onward) or already Live - hardware
+      // committed either way, so it counts as Used regardless of which.
+      const isUsed = live || (stage !== null && stage >= 6);
+      if (!isUsed) return;
 
       const kioskQty = item.kioskQty || 0;
-      target[bucket][kioskType] += kioskQty;
-      target.Total[kioskType] += kioskQty;
+      used[bucket][kioskType] += kioskQty;
+      used.Total[kioskType] += kioskQty;
       Object.entries(LEDGER_PER_SITE_DEFAULTS).forEach(([type, qty]) => {
-        target[bucket][type] += qty;
-        target.Total[type] += qty;
+        // ADA Unit & Mount is an EMEA-only requirement ("every store across
+        // EMEA has to have 1 unit") - UK opening stock is 0 to match, so UK
+        // sites must not be debited for it or the balance goes negative.
+        if (type === "ADA Unit & Mount" && bucket === "UK") return;
+        used[bucket][type] += qty;
+        used.Total[type] += qty;
       });
     });
 
@@ -531,8 +537,7 @@ export default function Home() {
       const buckets = ["UK", "EMEA", "Total"].map((bucket) => {
         const o = opening[bucket][type];
         const u = used[bucket][type];
-        const a = accounted[bucket][type];
-        return { bucket, opening: o, used: u, accounted: a, balance: o - u - a };
+        return { bucket, opening: o, used: u, balance: o - u };
       });
       return { type, buckets };
     });
@@ -553,7 +558,7 @@ export default function Home() {
       const kioskType = isLegacyKioskType(item.kioskUnitType, item.corpPartner) ? '22" Flyte' : "ELO5 - Kiosk";
       const live = (item.installPhase || "").toLowerCase().includes(LIVE_KEYWORD);
       const stage = stageNumber(item.installPhase);
-      const accountedFor = !live && stage !== null && stage >= 6;
+      const isUsed = live || (stage !== null && stage >= 6);
       return {
         name: item.name,
         country: item.country || "",
@@ -564,34 +569,35 @@ export default function Home() {
         kioskType,
         kioskQty: item.kioskQty || 0,
         kioskQtySource: item.kioskQtySource || "none",
-        classification: live ? "Used (Live)" : accountedFor ? "Accounted For (stage 6+)" : "Neither",
+        classification: isUsed ? (live ? "Used (Live)" : "Used (Stage 6+)") : "Not yet (Stage <6)",
       };
     });
   }, [data]);
 
-  // Table Forecast rows — Funded (SFK population), Whole Estate (every
-  // not-yet-live site), and Non-Funded as the difference between them (the
-  // FZE self-purchased Retrofit/Remodel population). Each scope is split
-  // into Total / Stage 6+ / Stage 5 (and below), one row per "Type of
-  // Table" shape plus a Total row.
-  const STAGE_BUCKETS = ["stage5Below", "stage6Plus", "total"];
-  const tableForecastRows = useMemo(() => {
+  // Table Forecast — three headline numbers (Used/Live, Needed Stage 6+,
+  // Needed Stage 5 and below), each split UK/EMEA/Total and by scope
+  // (Funded / Whole Estate / Non-Funded, Non-Funded as the difference).
+  const TABLE_METRICS = [
+    { key: "live", label: "Used — Live Sites" },
+    { key: "stage6Plus", label: "Needed — Stage 6+ (active pipeline)" },
+    { key: "stage5Below", label: "Needed — Stage 5 and below" },
+  ];
+  const tableForecastSummary = useMemo(() => {
     if (!tableForecast) return null;
-    const diff = (a, b) => a - b;
-    const rows = tableForecast.tableTypes.map((type) => {
-      const scopes = STAGE_BUCKETS.map((bucket) => {
-        const funded = tableForecast.funded[bucket][type] || 0;
-        const wholeEstate = tableForecast.wholeEstate[bucket][type] || 0;
-        return { bucket, funded, wholeEstate, nonFunded: diff(wholeEstate, funded) };
+    return TABLE_METRICS.map(({ key, label }) => {
+      const countryRows = ["UK", "EMEA"].map((country) => {
+        const funded = tableForecast.funded[country][key]?.sites || 0;
+        const wholeEstate = tableForecast.wholeEstate[country][key]?.sites || 0;
+        return { country, funded, wholeEstate, nonFunded: wholeEstate - funded };
       });
-      return { type, scopes };
+      const total = {
+        country: "Total",
+        funded: countryRows.reduce((s, r) => s + r.funded, 0),
+        wholeEstate: countryRows.reduce((s, r) => s + r.wholeEstate, 0),
+        nonFunded: countryRows.reduce((s, r) => s + r.nonFunded, 0),
+      };
+      return { key, label, rows: [...countryRows, total] };
     });
-    const totals = STAGE_BUCKETS.map((bucket) => {
-      const funded = tableForecast.fundedSites[bucket] || 0;
-      const wholeEstate = tableForecast.wholeEstateSites[bucket] || 0;
-      return { bucket, funded, wholeEstate, nonFunded: diff(wholeEstate, funded) };
-    });
-    return { rows, totals };
   }, [tableForecast]);
 
   const searchResults = useMemo(() => {
@@ -909,15 +915,7 @@ export default function Home() {
                     Download site-level detail (CSV)
                   </button>
                 </div>
-                <p className="stock-footnote">
-                  Scoped to the bulk hardware Subway itself purchased (SFK Format = Part Subway
-                  Funded / MFG Funded Site) — Retrofit and Remodel sites buy their own, site by
-                  site, so they're out of scope here. Pooled UK vs EMEA, not per-country, same
-                  as how it was bought. Balance = Opening Stock − Used (already Live) − Accounted
-                  For (Install Phase stage 6+, not yet live). Kiosk splits by variant: EG on the
-                  Move and MFG, the early adopters, ran the older 22" Flyte kiosk; everyone else
-                  is on the current ELO5 - Kiosk.
-                </p>
+                <p className="stock-footnote">This is for sites at Stage 6 or above, including Live.</p>
                 {stockError ? (
                   <p className="error-panel">{stockError}</p>
                 ) : !stock || !data ? (
@@ -928,13 +926,13 @@ export default function Home() {
                       <thead>
                         <tr>
                           <th rowSpan={2}>Hardware</th>
-                          <th colSpan={4}>🇬🇧 UK</th>
-                          <th colSpan={4}>🌍 EMEA</th>
-                          <th colSpan={4}>Total</th>
+                          <th colSpan={3}>🇬🇧 UK</th>
+                          <th colSpan={3}>🌍 EMEA</th>
+                          <th colSpan={3}>Total</th>
                         </tr>
                         <tr>
                           {["UK", "EMEA", "Total"].flatMap((bucket) =>
-                            ["Opening", "Used", "Accounted", "Balance"].map((label) => (
+                            ["Opening", "Used", "Balance"].map((label) => (
                               <th key={`${bucket}-${label}`} className="ledger-sub-th">
                                 {label}
                               </th>
@@ -949,7 +947,6 @@ export default function Home() {
                             {row.buckets.flatMap((b) => [
                               <td key={`${row.type}-${b.bucket}-o`}>{b.opening}</td>,
                               <td key={`${row.type}-${b.bucket}-u`}>{b.used}</td>,
-                              <td key={`${row.type}-${b.bucket}-a`}>{b.accounted}</td>,
                               <td
                                 key={`${row.type}-${b.bucket}-bal`}
                                 className={b.balance < 0 ? "stock-cell-bad" : "stock-cell-good"}
@@ -968,70 +965,69 @@ export default function Home() {
               <section className="panel ledger-panel">
                 <div className="stock-header">
                   <h2>Table Forecast</h2>
+                  <button
+                    type="button"
+                    className="stale-download"
+                    onClick={() =>
+                      downloadCsv(
+                        `table-forecast-detail-${new Date().toISOString().slice(0, 10)}.csv`,
+                        [
+                          ["Site", "Country", "Install Phase (as read)", "Bucket", "Funded", "Table Shape"],
+                          ...(tableForecast?.detailRows || []).map((r) => [
+                            r.name,
+                            r.country,
+                            r.installPhase,
+                            r.metric === "live" ? "Used (Live)" : r.metric === "stage6Plus" ? "Needed (Stage 6+)" : "Needed (Stage 5 and below)",
+                            r.funded ? "Yes" : "No",
+                            r.tableType,
+                          ]),
+                        ]
+                      )
+                    }
+                  >
+                    Download site-level detail (CSV)
+                  </button>
                 </div>
                 <p className="stock-footnote">
-                  Flat 1 table per site (no per-site quantity field exists on Monday), broken down
-                  by "Type of Table" shape. Funded = the SW Funded Stock Ledger population above.
-                  Whole Estate = every not-yet-live site across Interrupt, Disrupt, Small Format,
-                  Retrofit and Remodel/NRO, funded or not. Non-Funded is the difference between the
-                  two — the FZE self-purchased Retrofit/Remodel sites, who buy their own tables.
-                  Each is also split by Install Phase: Stage 0-5 (earlier sign-ups, including
-                  non-numbered admin states) vs Stage 6+ (far enough along to be a confident
-                  near-term need), plus a Total.
+                  Flat 1 table per site (no per-site quantity field exists on Monday). Funded = the
+                  SW Funded Stock Ledger population above. Whole Estate = every in-scope site
+                  (Interrupt, Disrupt, Small Format, Retrofit, Remodel/NRO), funded or not.
+                  Non-Funded is the difference — the FZE self-purchased Retrofit/Remodel sites, who
+                  buy their own tables. Table shape (Rectangle/Circular/Long Rectangle) is in the
+                  CSV download.
                 </p>
                 {tableForecastError ? (
                   <p className="error-panel">{tableForecastError}</p>
-                ) : !tableForecastRows ? (
+                ) : !tableForecastSummary ? (
                   <p className="loading-panel">Loading…</p>
                 ) : (
-                  <div className="stock-table-wrap">
-                    <table className="stock-table ledger-table">
-                      <thead>
-                        <tr>
-                          <th rowSpan={2}>Table Shape</th>
-                          <th colSpan={3}>Stage 0-5</th>
-                          <th colSpan={3}>Stage 6+</th>
-                          <th colSpan={3}>Total</th>
-                        </tr>
-                        <tr>
-                          {["stage5Below", "stage6Plus", "total"].flatMap((bucket) =>
-                            ["Funded", "Whole Estate", "Non-Funded"].map((label) => (
-                              <th key={`${bucket}-${label}`} className="ledger-sub-th">
-                                {label}
-                              </th>
-                            ))
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tableForecastRows.rows.map((row) => (
-                          <tr key={row.type}>
-                            <td className="stock-type-cell">{row.type}</td>
-                            {row.scopes.flatMap((s) => [
-                              <td key={`${row.type}-${s.bucket}-f`}>{s.funded}</td>,
-                              <td key={`${row.type}-${s.bucket}-w`}>{s.wholeEstate}</td>,
-                              <td key={`${row.type}-${s.bucket}-n`}>{s.nonFunded}</td>,
-                            ])}
-                          </tr>
-                        ))}
-                        <tr>
-                          <td className="stock-type-cell">
-                            <strong>Total</strong>
-                          </td>
-                          {tableForecastRows.totals.flatMap((s) => [
-                            <td key={`total-${s.bucket}-f`}>
-                              <strong>{s.funded}</strong>
-                            </td>,
-                            <td key={`total-${s.bucket}-w`}>
-                              <strong>{s.wholeEstate}</strong>
-                            </td>,
-                            <td key={`total-${s.bucket}-n`}>
-                              <strong>{s.nonFunded}</strong>
-                            </td>,
-                          ])}
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="forecast-grid">
+                    {tableForecastSummary.map((metric) => (
+                      <div className="forecast-card" key={metric.key}>
+                        <h3>{metric.label}</h3>
+                        <div className="forecast-card-table">
+                          <div className="forecast-card-row forecast-card-head">
+                            <span></span>
+                            <span>Funded</span>
+                            <span>Whole Estate</span>
+                            <span>Non-Funded</span>
+                          </div>
+                          {metric.rows.map((r) => (
+                            <div
+                              className={`forecast-card-row${r.country === "Total" ? " total" : ""}`}
+                              key={r.country}
+                            >
+                              <span className="forecast-card-country">
+                                {r.country === "UK" ? "🇬🇧 UK" : r.country === "EMEA" ? "🌍 EMEA" : "Total"}
+                              </span>
+                              <span className="forecast-card-value">{r.funded}</span>
+                              <span className="forecast-card-value">{r.wholeEstate}</span>
+                              <span className="forecast-card-value">{r.nonFunded}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </section>

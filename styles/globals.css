@@ -947,3 +947,79 @@ body {
   font-weight: 500;
   opacity: 0.85;
 }
+
+.forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.forecast-card {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.2rem;
+}
+
+.forecast-card h3 {
+  margin: 0 0 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.forecast-card-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.forecast-card-row {
+  display: grid;
+  grid-template-columns: 4.5rem repeat(3, 1fr);
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.forecast-card-row.forecast-card-head {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.forecast-card-row.forecast-card-head span {
+  text-align: center;
+}
+
+.forecast-card-row.forecast-card-head span:first-child {
+  text-align: left;
+}
+
+.forecast-card-row.total {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+.forecast-card-country {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.forecast-card-row.total .forecast-card-country {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.forecast-card-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-card-row.total .forecast-card-value {
+  color: var(--accent);
+}
