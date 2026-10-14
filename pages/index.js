@@ -353,10 +353,15 @@ export default function Home() {
   // Soon) and the history trend chips silently went stale after the first
   // load, even though the button looked like it refreshed everything.
   // loadAll below is what Refresh and auto-refresh now actually call.
-  const load = () => {
+  // bust=true appends a throwaway query param so the request misses the edge
+  // cache (s-maxage=60 + stale-while-revalidate=300 on the API routes meant a
+  // Refresh click could be served data up to ~6 minutes old).
+  const withBust = (path, bust) => (bust ? `${path}?t=${Date.now()}` : path);
+
+  const load = (bust = false) => {
     setLoading(true);
     setError(null);
-    fetch("/api/board-data")
+    fetch(withBust("/api/board-data", bust))
       .then(async (r) => {
         let json;
         try {
@@ -376,16 +381,16 @@ export default function Home() {
       .finally(() => setLoading(false));
   };
 
-  const loadHistory = () => {
-    fetch("/api/history")
+  const loadHistory = (bust = false) => {
+    fetch(withBust("/api/history", bust))
       .then((r) => r.json())
       .then(setHistory)
       .catch(() => setHistory(null));
   };
 
-  const loadStock = () => {
+  const loadStock = (bust = false) => {
     setStockError(null);
-    fetch("/api/stock-data")
+    fetch(withBust("/api/stock-data", bust))
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json.error || "Failed to load stock data");
@@ -395,9 +400,9 @@ export default function Home() {
       .catch((e) => setStockError(e.message));
   };
 
-  const loadTableForecast = () => {
+  const loadTableForecast = (bust = false) => {
     setTableForecastError(null);
-    fetch("/api/table-forecast")
+    fetch(withBust("/api/table-forecast", bust))
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json.error || "Failed to load the table forecast");
@@ -407,15 +412,15 @@ export default function Home() {
       .catch((e) => setTableForecastError(e.message));
   };
 
-  const loadAll = () => {
-    load();
-    loadHistory();
-    loadStock();
-    loadTableForecast();
+  const loadAll = (bust = false) => {
+    load(bust);
+    loadHistory(bust);
+    loadStock(bust);
+    loadTableForecast(bust);
   };
 
   useEffect(() => {
-    loadAll();
+    loadAll(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -429,7 +434,7 @@ export default function Home() {
   useEffect(() => {
     window.localStorage.setItem(AUTO_REFRESH_KEY, autoRefresh ? "1" : "0");
     if (!autoRefresh) return;
-    const id = setInterval(loadAll, AUTO_REFRESH_INTERVAL_MS);
+    const id = setInterval(() => loadAll(true), AUTO_REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh]);
@@ -848,7 +853,7 @@ export default function Home() {
               <span className="auto-refresh-dot" /> Auto-refresh
             </button>
 
-            <button className="refresh" onClick={loadAll} disabled={loading}>
+            <button className="refresh" onClick={() => loadAll(true)} disabled={loading}>
               {loading ? <BouncingDots /> : "Refresh"}
             </button>
           </div>
