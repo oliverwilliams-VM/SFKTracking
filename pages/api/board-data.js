@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 
     // Cache at the edge for a minute so repeat loads within a session are
     // near-instant; stale-while-revalidate keeps it fresh in the background.
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "private, no-store");
 
     res.status(200).json({
       boardName,
